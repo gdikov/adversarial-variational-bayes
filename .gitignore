@@ -28,3 +28,6 @@ coverage.xml
 
 # Notes
 NOTES.txt
+
+# logs and debug
+logs/

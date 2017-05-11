@@ -1,1 +1,1 @@
-from load_dataset import load_MNIST
+from datasets import load_MNIST
