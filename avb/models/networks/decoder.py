@@ -1,4 +1,4 @@
-from keras.layers import Dense, Conv2DTranspose
+from architectures import basic_network
 from base_network import BaseNetwork
 import keras.backend as K
 from edward.models import Bernoulli
@@ -8,7 +8,7 @@ class Decoder(object, BaseNetwork):
     def __init__(self, inputs, output_shape):
         super(Decoder, self).__init__()
         # TODO: make model parametrisation configurable
-        self.parametrisation = basic_decoder(inputs, output_shape)
+        self.parametrisation = basic_network(inputs, output_shape)
         self.log_probs = Bernoulli(logits=self.parametrisation)
 
     def get_input(self):
@@ -34,19 +34,6 @@ class Decoder(object, BaseNetwork):
         return K.mean(K.sum(reconstruction_log_likelihood, axis=1))
 
 
-def basic_decoder(inputs, output_shape, n_hidden=2):
-    h = Dense(512, activation='relu')(inputs)
-    for i in xrange(n_hidden - 1):
-        h = Dense(512, activation='relu')(h)
-    h = Dense(output_shape)(h)
-    return h
 
-def dcgan_decoder():
-    projection = Dense(4*4*1024, activation=None)
-    inflation = Conv2DTranspose(512, kernel_size=(5, 5), strides=(2, 2))(projection)    # output is (N, 512, 8, 8)
-    inflation = Conv2DTranspose(256, kernel_size=(5, 5), strides=(2, 2))(inflation)     # output is (N, 256, 16, 16)
-    inflation = Conv2DTranspose(128, kernel_size=(5, 5), strides=(2, 2))(inflation)     # output is (N, 128, 32, 32)
-    inflation = Conv2DTranspose(1, kernel_size=(5, 5), strides=(1, 1))(inflation)      # output is (N, 1, 28, 28)
-    return inflation
 
 
