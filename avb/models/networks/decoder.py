@@ -8,8 +8,10 @@ class Decoder(object, BaseNetwork):
     def __init__(self, inputs, output_shape):
         super(Decoder, self).__init__()
         # TODO: make model parametrisation configurable
-        self.parametrisation = basic_network(inputs, output_shape)
-        self.log_probs = Bernoulli(logits=self.parametrisation)
+        self.parametrisation_prior = basic_network(inputs['p(z)'], output_shape)
+        self.parametrisation_posterior = basic_network(inputs['q(z|x)'], output_shape)
+        self.log_probs = {'p(z)': Bernoulli(logits=self.parametrisation_prior),
+                          'q(z|x)': Bernoulli(logits=self.parametrisation_posterior)}
 
     def get_input(self):
         pass

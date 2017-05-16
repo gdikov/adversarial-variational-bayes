@@ -110,3 +110,17 @@ def load_8schools():
     estimated_effects = np.array([28.39, 7.74, -2.75, 6.82, -0.64, 0.63, 18.01, 12.16])
     std_errors = np.array([14.9, 10.2, 16.3, 11.0, 9.4, 11.4, 10.4, 17.6])
     return {'effect': estimated_effects, 'stderr': std_errors}
+
+
+def load_npoints(n=4):
+    """
+    Load a generalisation of the 4 points synthetic dataset as described in the Experiments section, Generative models, 
+    Synthetic example in "Adversarial Variational Bayes, L. Mescheder et al., 2017". 
+    
+    Args:
+        Number of distinct data points (i.e. dimensionality of the (vector) space in which they reside)
+        
+    Returns:
+        A dict with keys `data` and `target` containing the data points and a fictitious label (completely unnecessary)
+    """
+    return {'data': np.eye(n), 'target': range(n)}

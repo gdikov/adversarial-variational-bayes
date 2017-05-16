@@ -4,11 +4,11 @@ import keras.backend as K
 from keras.losses import categorical_crossentropy
 
 
-class Discraminator(object, BaseNetwork):
+class Discriminator(object, BaseNetwork):
     def __init__(self, inputs, output_shape):
-        super(Discraminator, self).__init__()
-        self.pred_posterior = basic_network(K.concatenate((inputs['data'], inputs['posterior']), axis=1), output_shape)
-        self.pred_prior = basic_network(K.concatenate((inputs['data'], inputs['prior']), axis=1), output_shape)
+        super(Discriminator, self).__init__()
+        self.pred_posterior = basic_network(K.concatenate((inputs['x'], inputs['q(z|x)']), axis=1), output_shape)
+        self.pred_prior = basic_network(K.concatenate((inputs['x'], inputs['p(z)']), axis=1), output_shape)
 
     def get_input(self):
         pass
