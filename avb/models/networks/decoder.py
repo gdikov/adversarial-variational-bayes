@@ -1,41 +1,16 @@
-from architectures import basic_network
+from architectures import simple_network
 from base_network import BaseNetwork
-import keras.backend as K
-from edward.models import Bernoulli
+from tensorflow.contrib.distributions import Bernoulli
+from keras.layers import Lambda, Dense
 
 
 class Decoder(object, BaseNetwork):
     def __init__(self, inputs, output_shape):
         super(Decoder, self).__init__()
-        # TODO: make model parametrisation configurable
-        self.parametrisation_prior = basic_network(inputs['p(z)'], output_shape)
-        self.parametrisation_posterior = basic_network(inputs['q(z|x)'], output_shape)
-        self.log_probs = {'p(z)': Bernoulli(logits=self.parametrisation_prior),
-                          'q(z|x)': Bernoulli(logits=self.parametrisation_posterior)}
+        parametrisation = simple_network(inputs[0], output_shape)
+        parametrisation = Dense(output_shape, activation='sigmoid')(parametrisation)
+        # self.output_sampler = Lambda(lambda x: Bernoulli(probs=x).sample())(parametrisation)
+        self.log_probs = Lambda(lambda x: Bernoulli(probs=parametrisation).log_prob(x))(inputs[1])
 
-    def get_input(self):
-        pass
-
-    def get_loss(self):
-        """
-        Return the reconstruction loss: -E_{z~q(z|x)}[log(p(x|z))]. Note the minus sign before the likelihood term.
-        It is needed since the objective is to maximise the likelihood of the generated data under the inferred 
-        latent variables.
-
-        Returns:
-            Loss object of the decoder network.
-        Notes:
-            In the AVB context the regularisation term D_{KL}(q(z|x)||p(z)) is approximated by the 
-            discriminator network and hence is omitted in this loss definition. Gaussian inference models, 
-            such as classical VAEs are able to compute this term analytically and hence can be added
-            directly into this loss. 
-        """
-        # Since we compute p(x|z) in log space and we assume independence between the covariates of each sample x_i,
-        # we sum the logs of each predicted component and take the mean of all samples in a batch.
-        reconstruction_log_likelihood = self.log_probs
-        return K.mean(K.sum(reconstruction_log_likelihood, axis=1))
-
-
-
-
-
+    def get_output(self):
+        return self.log_probs

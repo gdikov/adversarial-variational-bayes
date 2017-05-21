@@ -1,7 +1,7 @@
 from keras.layers import Dense, Conv2DTranspose
 
 
-def basic_network(inputs, output_shape, n_hidden=2):
+def simple_network(inputs, output_shape, n_hidden=2):
     if not isinstance(output_shape, int):
         raise TypeError("Output shape for the basic network should be a single integer "
                         "for the number of hidden units without activation in the last layer.")
