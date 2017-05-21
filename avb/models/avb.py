@@ -1,48 +1,59 @@
+import numpy as np
 from keras.models import Model
-from keras.optimizers import Adam
-from networks.discriminator import Discriminator
-from networks.encoder import Encoder
-from networks.decoder import Decoder
 from keras.layers import Input
-from edward.models import MultivariateNormalDiag
-import keras.backend as K
+
+from networks import Encoder, Decoder, Discriminator
+from .avb_loss import AVBLossLayer
 
 
 class AdversarialVariationalBayes(object):
-    def __init__(self, data_dim, latent_dim, noise_dim=1, batch_size=32, with_ac=False, mode='generative'):
+    def __init__(self, data_dim, latent_dim, noise_dim=1):
+
+        self.data_dim = data_dim
+        self.noise_dim = noise_dim
+        self.latent_dim = latent_dim
 
         # define the encoder input as the concatenated data and noise variable (renormalisation trick)
-        data_input = Input(batch_shape=(batch_size, data_dim), name='x')
-        noise_input = MultivariateNormalDiag(loc=K.zeros((batch_size, noise_dim)),
-                                             scale_diag=K.ones((batch_size, noise_dim)))
-        encoder_input = K.concatenate([data_input, noise_input], axis=1)
-        self.encoder = Encoder(inputs=encoder_input, output_shape=latent_dim)
+        data_input = Input(shape=(data_dim,), name='input_data')
+        noise_input = Input(shape=(noise_dim,), name='input_noise')
+        prior_input = Input(shape=(latent_dim,), name='input_latent_prior')
 
-        # define a standard Normal prior distribution of the latent variables
-        prior = MultivariateNormalDiag(loc=K.zeros((batch_size, latent_dim)),
-                                       scale_diag=K.ones((batch_size, latent_dim)))
+        self.encoder_network = Encoder(inputs=[data_input, noise_input], output_shape=latent_dim)
+        encoder_output = self.encoder_network.get_output()
+        self.decoder_network = Decoder(inputs=[encoder_output, data_input],
+                                       output_shape=data_dim)
+        self.discriminator_network = Discriminator(inputs=[data_input, encoder_output, prior_input],
+                                                   output_shape=1)
 
-        self.discriminator = Discriminator(inputs={'x': data_input, 'q(z|x)': self.encoder.get_output(), 'p(z)': prior},
-                                           output_shape=batch_size)
+        avb_inputs = [data_input, noise_input, prior_input]
+        discr_output = self.discriminator_network.get_output()
+        discr_output_prior, discr_output_posterior = discr_output
+        decoder_output = self.decoder_network.get_output()
+        avb_output = AVBLossLayer()([discr_output_posterior, discr_output_prior, decoder_output])
 
-        self.decoder = Decoder(inputs={'q(z|x)': self.encoder.get_output(), 'p(z)': prior}, output_shape=data_dim)
-        self._model = self._build()
+        self.complete_avb_model = Model(inputs=avb_inputs, outputs=avb_output)
+        self.complete_avb_model.compile(optimizer='adam', loss=None)
 
-    def _build(self):
-        optimiser = Adam()
-        summarised_loss = [self.discriminator.get_loss(),
-                           self.decoder.get_loss(),
-                           self.encoder.get_loss()]
-        inputs = [self.encoder.get_input(), self.discriminator.get_input()]
-        predictions = [self.decoder.get_output()]
-        model = Model(inputs=inputs, outputs=predictions)
-        model.compile(optimizer=optimiser, loss=summarised_loss, metrics=['accuracy'])
-        return model
+        # detach the encoder and decoder for inference and data generation purposes
+        # self.encoder_model = Model(inputs=[data_input, noise_input], outputs=encoder_output)
+        # self.decoder_model = Model(inputs=prior_input, outputs=decoder_output)
 
-    def fit(self, data, target):
-        train_history = self._model.fit(x=data, y=target)
-        return train_history
+    def _iter_data(self, data, batch_size):
+        data_size = data.shape[0]
+        while True:
+            indices = np.random.choice(data_size, size=batch_size, replace=True)
+            random_noise_data = np.random.standard_normal(size=(batch_size, self.noise_dim))
+            random_noise_prior = np.random.standard_normal(size=(batch_size, self.latent_dim))
+            yield [data[indices], random_noise_data, random_noise_prior], None
+
+    def fit(self, data, batch_size=32):
+        self.complete_avb_model.fit_generator(self._iter_data(data, batch_size),
+                                              steps_per_epoch=32,
+                                              epochs=20,
+                                              workers=1)
+
+    def predict(self):
+        pass
 
     def evaluate(self):
-        # self._model.evaluate()
         pass
