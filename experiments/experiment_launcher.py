@@ -1,6 +1,6 @@
 from utils.data_utils.datasets import load_npoints
 from avb.models.avb import AdversarialVariationalBayes
-
+from visualization.latent_space import plot_latent_2d
 
 # Variational Inferece:
 #
@@ -16,5 +16,8 @@ from avb.models.avb import AdversarialVariationalBayes
 
 if __name__ == '__main__':
     data = load_npoints(n=4)
-    avb = AdversarialVariationalBayes(data_dim=4, latent_dim=2)
-    avb.fit(data['data'])
+    train_data, train_labels = data['data'], data['target']
+    avb = AdversarialVariationalBayes(data_dim=4, latent_dim=2, noise_dim=4)
+    avb.fit(train_data, batch_size=512)
+    latent_vars = avb.infer(train_data, batch_size=train_data.shape[0])
+    plot_latent_2d(latent_vars, train_labels)
