@@ -1,6 +1,7 @@
 import keras.backend as ker
 from keras.layers import Layer
-from keras.losses import binary_crossentropy as cross_entropy
+import tensorflow as tf
+
 
 
 class AVBLossLayer(Layer):
@@ -17,10 +18,10 @@ class AVBLossLayer(Layer):
         # # The encoder tries to minimize the discriminator output, i.e. to deceive it that this is the prior
         encoder_loss = ker.mean(discrim_output_posterior)
         # The dicriminator loss is the GAN loss with input from the prior and posterior distributions
-        discriminator_loss = ker.mean(cross_entropy(y_true=ker.ones_like(discrim_output_posterior),
-                                                    y_pred=discrim_output_posterior)
-                                      + cross_entropy(y_true=ker.zeros_like(discrim_output_prior),
-                                                      y_pred=discrim_output_prior))
+        discriminator_loss = ker.mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=discrim_output_posterior,
+                                                                              labels=ker.ones_like(discrim_output_posterior))
+                                      + tf.nn.sigmoid_cross_entropy_with_logits(labels=ker.zeros_like(discrim_output_prior),
+                                                                                logits=discrim_output_prior))
         return ker.mean(encoder_loss + decoder_loss + discriminator_loss)
 
     def call(self, inputs, **kwargs):
