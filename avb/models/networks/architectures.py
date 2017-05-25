@@ -1,13 +1,13 @@
 from keras.layers import Dense, Conv2DTranspose
 
 
-def simple_network(inputs, output_shape, n_hidden=2):
+def simple_network(inputs, output_shape, n_hidden=4):
     if not isinstance(output_shape, int):
         raise TypeError("Output shape for the basic network should be a single integer "
                         "for the number of hidden units without activation in the last layer.")
-    h = Dense(512, activation='relu')(inputs)
+    h = Dense(256, activation='relu')(inputs)
     for i in xrange(n_hidden - 1):
-        h = Dense(512, activation='relu')(h)
+        h = Dense(256, activation='relu')(h)
     h = Dense(output_shape)(h)
     return h
 
