@@ -16,13 +16,13 @@ class AVBLossLayer(Layer):
         # The decoder tries to maximise the reconstruction data log-likelihood, hence the minus sign
         decoder_loss = -reconstruction_log_likelihood
         # # The encoder tries to minimize the discriminator output, i.e. to deceive it that this is the prior
-        encoder_loss = 0*ker.mean(discrim_output_posterior)
+        encoder_loss = ker.mean(discrim_output_posterior)
         # The dicriminator loss is the GAN loss with input from the prior and posterior distributions
-        discriminator_loss = 0*ker.mean(binary_crossentropy(y_pred=discrim_output_posterior,
+        discriminator_loss = ker.mean(binary_crossentropy(y_pred=discrim_output_posterior,
                                                           y_true=ker.ones_like(discrim_output_posterior))
                                       + binary_crossentropy(y_pred=discrim_output_prior,
                                                             y_true=ker.zeros_like(discrim_output_prior)))
-        return ker.mean(encoder_loss + decoder_loss + discriminator_loss)
+        return encoder_loss + decoder_loss + discriminator_loss
 
     def call(self, inputs, **kwargs):
         discrim_output_prior, discrim_output_posterior, decoder_output_log_probs = inputs
