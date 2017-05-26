@@ -15,11 +15,12 @@ from visualization.latent_space import plot_latent_2d
 #   * CelebA
 
 if __name__ == '__main__':
-    data = load_npoints(n=4)
+    data_dim = 4
+    data = load_npoints(n=data_dim)
     train_data, train_labels = data['data'], data['target']
-    avb = AdversarialVariationalBayes(data_dim=4, latent_dim=2, noise_dim=4)
-    avb.fit(train_data, batch_size=512, epochs=20)
+    avb = AdversarialVariationalBayes(data_dim=data_dim, latent_dim=2, noise_dim=data_dim)
+    avb.fit(train_data, batch_size=512, epochs=10)
     latent_vars = avb.infer(train_data, batch_size=train_data.shape[0])
     plot_latent_2d(latent_vars, train_labels)
-    generations = avb.generate(n_points=10)
-    print(generations)
+    # generations = avb.generate(n_points=100)
+    # print(generations)

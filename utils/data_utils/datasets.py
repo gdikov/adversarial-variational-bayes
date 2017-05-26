@@ -123,4 +123,4 @@ def load_npoints(n=4):
     Returns:
         A dict with keys `data` and `target` containing the data points and a fictitious label (completely unnecessary)
     """
-    return {'data': np.eye(n), 'target': range(n)}
+    return {'data': np.repeat(np.eye(n), 512, axis=0), 'target': np.repeat(np.arange(n), 512, axis=0)}
