@@ -19,7 +19,7 @@ if __name__ == '__main__':
     train_data, train_labels = data['data'], data['target']
     avb = AdversarialVariationalBayes(data_dim=4, latent_dim=2, noise_dim=4)
     avb.fit(train_data, batch_size=512, epochs=20)
-    # latent_vars = avb.infer(train_data, batch_size=train_data.shape[0])
-    # plot_latent_2d(latent_vars, train_labels)
+    latent_vars = avb.infer(train_data, batch_size=train_data.shape[0])
+    plot_latent_2d(latent_vars, train_labels)
     generations = avb.generate(n_points=10)
     print(generations)
