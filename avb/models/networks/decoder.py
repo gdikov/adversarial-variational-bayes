@@ -22,8 +22,8 @@ class Decoder(object):
 
         latent_encoding = Input(shape=(self.latent_dim,), name='generator_latent_input')
 
-        generator_body = Dense(256, activation='relu')(latent_encoding)
-        generator_body = Dense(256, activation='relu')(generator_body)
+        generator_body = Dense(512, activation='relu')(latent_encoding)
+        generator_body = Dense(512, activation='relu')(generator_body)
 
         sampler_params = Dense(self.data_dim, activation='sigmoid', name='decoder_sampler_params')(generator_body)
         sampler_params = Lambda(lambda x: 1e-6 + (1 - 2e-6) * x)(sampler_params)

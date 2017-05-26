@@ -8,8 +8,8 @@ class Encoder(object):
         noise_input = Input(shape=(noise_dim,))
         encoder_input = Concatenate(axis=1, name='data_noise_concat')([data_input, noise_input])
 
-        encoder_body = Dense(256, activation='relu')(encoder_input)
-        encoder_body = Dense(256, activation='relu')(encoder_body)
+        encoder_body = Dense(512, activation='relu')(encoder_input)
+        encoder_body = Dense(512, activation='relu')(encoder_body)
 
         latent_factors = Dense(latent_dim, activation=None)(encoder_body)
 

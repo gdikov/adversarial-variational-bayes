@@ -25,20 +25,18 @@ class AdversarialVariationalBayes(object):
 
         posterior_approximation = encoder([data_input, noise_input])
         reconstruction_log_likelihood = decoder([data_input, posterior_approximation], is_learning=True)
-        discriminator_output_posterior = discriminator(Concatenate(axis=1)([data_input, posterior_approximation]))
-        discriminator_output_prior = discriminator(Concatenate(axis=1)([data_input, prior_input]))
+        discriminator_output_prior = discriminator([data_input, prior_input])
+        discriminator_output_posterior = discriminator([data_input, posterior_approximation])
 
-        avb_loss = AVBLossLayer()([discriminator_output_posterior,
-                                   discriminator_output_prior,
+        avb_loss = AVBLossLayer()([discriminator_output_prior,
+                                   discriminator_output_posterior,
                                    reconstruction_log_likelihood])
 
         self._avb = Model(inputs=[data_input, noise_input, prior_input], outputs=avb_loss)
-        self._avb.compile(optimizer=Optimiser(lr=1e-3, beta_1=0.5, epsilon=1e-3), loss=None)
+        self._avb.compile(optimizer=Optimiser(lr=1e-3), loss=None)
 
         self._inference_model = Model(inputs=[data_input, noise_input], outputs=posterior_approximation)
         self._generative_model = Model(inputs=prior_input, outputs=decoder(prior_input, is_learning=False))
-        # from keras.utils import plot_model
-        # plot_model(self._avb)
 
     def _iter_data(self, data=None, batch_size=32, mode='training'):
         if mode == 'inference':
