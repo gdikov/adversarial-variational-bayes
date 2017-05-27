@@ -8,28 +8,20 @@ class Decoder(object):
         self.latent_dim = latent_dim
         self.data_dim = data_dim
 
-        real_data = Input(shape=(self.data_dim,), name='decoder_ll_estimator_data_input')
-        latent_encoding = Input(shape=(self.latent_dim,), name='decoder_latent_input')
+        real_data = Input(shape=(self.data_dim,), name='dec_ll_estimator_data_input')
+        latent_encoding = Input(shape=(self.latent_dim,), name='dec_latent_input')
 
-        self.generator = self._build_generator_model()
+        generator_body = Dense(512, activation='relu', name='dec_body1')(latent_encoding)
+        generator_body = Dense(512, activation='relu', name='dec_body2')(generator_body)
 
-        log_probs = Lambda(lambda x: Bernoulli(probs=self.generator(x[1]),
-                                               validate_args=False).log_prob(x[0]))([real_data, latent_encoding])
+        sampler_params = Dense(self.data_dim, activation='sigmoid', name='dec_sampler_params')(generator_body)
+        sampler_params = Lambda(lambda x: 1e-6 + (1 - 2e-6) * x, name='dec_probs_clipper')(sampler_params)
 
-        self.ll_estimator = Model(inputs=[real_data, latent_encoding], outputs=log_probs, name='LL-Decoder')
+        log_probs = Lambda(lambda x: Bernoulli(probs=x[0], name='dec_bernoulli').log_prob(x[1]),
+                           name='dec_bernoulli_logprob')([sampler_params, real_data])
 
-    def _build_generator_model(self):
-
-        latent_encoding = Input(shape=(self.latent_dim,), name='generator_latent_input')
-
-        generator_body = Dense(512, activation='relu')(latent_encoding)
-        generator_body = Dense(512, activation='relu')(generator_body)
-
-        sampler_params = Dense(self.data_dim, activation='sigmoid', name='decoder_sampler_params')(generator_body)
-        sampler_params = Lambda(lambda x: 1e-6 + (1 - 2e-6) * x)(sampler_params)
-
-        generator_model = Model(inputs=latent_encoding, outputs=sampler_params, name='Sampling-Decoder')
-        return generator_model
+        self.generator = Model(inputs=latent_encoding, outputs=sampler_params, name='dec_sampling')
+        self.ll_estimator = Model(inputs=[real_data, latent_encoding], outputs=log_probs, name='dec_trainable')
 
     def __call__(self, *args, **kwargs):
         is_learninig = kwargs.get('is_learning', True)
