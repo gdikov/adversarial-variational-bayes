@@ -75,9 +75,9 @@ class AdversarialVariationalBayes(object):
         for i in range(epochs):
             print("Epoch {}".format(i))
             self._avb_dec_train.fit_generator(self._iter_data(data, batch_size, indices=indices),
-                                        steps_per_epoch=1, epochs=1, workers=1, verbose=0)
+                                        steps_per_epoch=1, epochs=1, workers=1, verbose=1)
             self._avb_disc_train.fit_generator(self._iter_data(data, batch_size, indices=indices),
-                                         steps_per_epoch=1, epochs=1, workers=1, verbose=0)
+                                         steps_per_epoch=1, epochs=1, workers=1, verbose=1)
 
     def infer(self, data, batch_size=32):
         data_size = data.shape[0]
