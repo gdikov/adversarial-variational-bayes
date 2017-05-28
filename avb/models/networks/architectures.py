@@ -1,14 +1,30 @@
 from keras.layers import Dense, Conv2DTranspose
 
 
-def simple_network(inputs, output_shape, n_hidden=4):
-    if not isinstance(output_shape, int):
-        raise TypeError("Output shape for the basic network should be a single integer "
-                        "for the number of hidden units without activation in the last layer.")
-    h = Dense(256, activation='relu')(inputs)
-    for i in xrange(n_hidden - 1):
-        h = Dense(256, activation='relu')(h)
-    h = Dense(output_shape)(h)
+def repeat_dense(input, num_layers, num_units=256, activation='relu', name_prefix=None):
+    """
+    Repeat Dense Keras layers, attached to given input. 
+    
+    Args:
+        input: A Keras layer or Tensor preceding the repeated layers 
+        num_layers: number of layers to repeat
+        num_units: number of units in each layer 
+        activation: the activation in each layer
+        name_prefix: the prefix of the named layers. A `_i` will be be appended automatically, 
+            where i is the layer number, starting from 0.
+
+    Returns:
+        The last appended Keras layer. 
+    """
+    if num_units < 1 or num_layers < 1:
+        raise ValueError('`num_layers` and `num_units` must be >= 1, '
+                         'found {} and {} respectively'.format(num_layers, num_units))
+    num_units = int(num_units)
+    num_layers = int(num_layers)
+    name_prefix = name_prefix or 'rep_{}_dim{}'.format(activation, num_units)
+    h = Dense(num_units, activation=activation, name=name_prefix + '_0')(input)
+    for i in xrange(num_layers - 1):
+        h = Dense(num_units, activation=activation, name=name_prefix + '_' + str(i+1))(h)
     return h
 
 

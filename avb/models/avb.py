@@ -2,9 +2,10 @@ import numpy as np
 np.random.seed(7)
 from keras.models import Model, Input
 from keras.optimizers import Adam as Optimiser
+from freezable_model import FreezableModel
 
 from networks import Encoder, Decoder, Discriminator
-from .avb_loss import AVBLossLayer
+from .avb_loss import DiscriminatorLossLayer, DecoderLossLayer
 
 
 class AdversarialVariationalBayes(object):
@@ -27,19 +28,28 @@ class AdversarialVariationalBayes(object):
         discriminator_output_prior = discriminator([data_input, prior_input])
         discriminator_output_posterior = discriminator([data_input, posterior_approximation])
 
-        avb_loss = AVBLossLayer()([discriminator_output_prior,
-                                   discriminator_output_posterior,
-                                   reconstruction_log_likelihood])
+        discriminator_loss = DiscriminatorLossLayer(name='disc_loss')([discriminator_output_prior,
+                                                                       discriminator_output_posterior])
+        decoder_loss = DecoderLossLayer(name='dec_loss')([reconstruction_log_likelihood,
+                                                          discriminator_output_posterior])
 
-        self._avb = Model(inputs=[data_input, noise_input, prior_input], outputs=avb_loss)
-        self._avb.compile(optimizer=Optimiser(lr=1e-3, beta_1=0.5), loss=None)
+        self._avb_disc_train = FreezableModel(inputs=[data_input, noise_input, prior_input], outputs=discriminator_loss, name_prefix=['disc'])
+        self._avb_dec_train = FreezableModel(inputs=[data_input, noise_input, prior_input], outputs=decoder_loss, name_prefix=['dec', 'enc'])
+
+        self._avb_disc_train.freeze()
+        self._avb_dec_train.unfreeze()
+        self._avb_dec_train.compile(optimizer=Optimiser(lr=1e-3, beta_1=0.5), loss=None)
+
+        self._avb_disc_train.unfreeze()
+        self._avb_dec_train.freeze()
+        self._avb_disc_train.compile(optimizer=Optimiser(lr=1e-3, beta_1=0.5), loss=None)
 
         self._inference_model = Model(inputs=[data_input, noise_input], outputs=posterior_approximation)
         self._generative_model = Model(inputs=prior_input, outputs=decoder(prior_input, is_learning=False))
         # from keras.utils import plot_model
         # plot_model(self._avb)
 
-    def _iter_data(self, data=None, batch_size=32, mode='training'):
+    def _iter_data(self, data=None, batch_size=32, mode='training', indices=None):
         if mode == 'inference':
             data_size = data.shape[0]
             batches = np.split(np.arange(data_size), data_size // batch_size)
@@ -53,14 +63,21 @@ class AdversarialVariationalBayes(object):
                 yield random_noise_prior
         else:
             data_size = data.shape[0]
+            # indices = np.split(np.arange(data_size), data_size // batch_size)
             while True:
-                indices = np.random.choice(data_size, size=batch_size, replace=True)
+
                 random_noise_data = np.random.standard_normal(size=(batch_size, self.noise_dim))
                 random_noise_prior = np.random.standard_normal(size=(batch_size, self.latent_dim))
                 yield [data[indices], random_noise_data, random_noise_prior], None
 
     def fit(self, data, batch_size=32, epochs=1):
-        self._avb.fit_generator(self._iter_data(data, batch_size), steps_per_epoch=8, epochs=epochs, workers=1)
+        indices = np.random.choice(data.shape[0], size=batch_size, replace=True)
+        for i in range(epochs):
+            print("Epoch {}".format(i))
+            self._avb_dec_train.fit_generator(self._iter_data(data, batch_size, indices=indices),
+                                        steps_per_epoch=1, epochs=1, workers=1, verbose=1)
+            self._avb_disc_train.fit_generator(self._iter_data(data, batch_size, indices=indices),
+                                         steps_per_epoch=1, epochs=1, workers=1, verbose=1)
 
     def infer(self, data, batch_size=32):
         data_size = data.shape[0]

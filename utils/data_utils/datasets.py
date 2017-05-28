@@ -2,9 +2,11 @@ import urllib2
 import os
 import struct
 import sklearn.datasets.mldata as fetcher
-from utils.logger_config import logger
 import numpy as np
+import logging
 np.random.seed(7)
+logger = logging.getLogger(__file__)
+
 
 # FIXME: make it configurable
 PROJECT_DATA_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)), "..", "..", "data")
