@@ -5,7 +5,7 @@ import sklearn.datasets.mldata as fetcher
 import numpy as np
 import logging
 np.random.seed(7)
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 # FIXME: make it configurable
@@ -27,7 +27,7 @@ def load_mnist(local_data_path=None, one_hot=True):
     def convert_to_one_hot(raw_target):
         n_uniques = len(np.unique(raw_target))
         one_hot_target = np.zeros((raw_target.shape[0], n_uniques))
-        one_hot_target[np.arange(raw_target.shape[0]), raw_target] = 1
+        one_hot_target[np.arange(raw_target.shape[0]), raw_target.astype(np.int)] = 1
         return one_hot_target
 
     if local_data_path is None:

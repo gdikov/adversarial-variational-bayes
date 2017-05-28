@@ -45,7 +45,7 @@ class AVBDataIterator:
             for batch_indices in batches_indices:
                 random_noise_data = self.noise_sampler(size=(self.batch_size, self.input_noise_dim))
                 random_noise_prior = self.noise_sampler(size=(self.batch_size, self.prior_noise_dim))
-                yield [self.data[batch_indices], random_noise_data, random_noise_prior], None
+                yield [self.data[batch_indices], random_noise_data, random_noise_prior]
 
     def iter_data_inference(self):
         if self.shuffle:
@@ -69,13 +69,14 @@ def iter_data(data=None, batch_size=32, mode='training', **kwargs):
     if mode == 'inference':
         data_iterator = AVBDataIterator(data=data, batch_size=batch_size, shuffle=False, seed=seed,
                                         noise_distribution='normal', input_noise_dim=input_noise_dim)
-        return data_iterator.iter_data_inference()
+
+        return data_iterator.iter_data_inference(), data_iterator.n_batches
     elif mode == 'generation':
         data_iterator = AVBDataIterator(data=data, batch_size=batch_size, shuffle=False)
-        return data_iterator.iter_data_generation()
+        return data_iterator.iter_data_generation(), data_iterator.n_batches
     elif mode == 'training':
         latent_dim = kwargs.get('latent_dim')
         data_iterator = AVBDataIterator(data=data, batch_size=batch_size, shuffle=True,
                                         seed=seed, noise_distribution='normal',
                                         input_noise_dim=input_noise_dim, prior_noise_dim=latent_dim)
-        return data_iterator.iter_data_training()
+        return data_iterator.iter_data_training(), data_iterator.n_batches

@@ -38,7 +38,7 @@ class Encoder(object):
         noise_input = Input(shape=(noise_dim,), name='enc_input_noise')
         encoder_input = Concatenate(axis=1, name='enc_data_noise_concat')([data_input, noise_input])
 
-        encoder_body = repeat_dense(encoder_input, num_layers=2, num_units=512, name_prefix='enc_body')
+        encoder_body = repeat_dense(encoder_input, num_layers=2, num_units=256, name_prefix='enc_body')
 
         latent_factors = Dense(latent_dim, activation=None, name='enc_latent')(encoder_body)
 
