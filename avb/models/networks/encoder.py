@@ -4,7 +4,7 @@ from keras.models import Model
 
 from architectures import repeat_dense
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 class Encoder(object):
