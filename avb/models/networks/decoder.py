@@ -40,7 +40,7 @@ class Decoder(object):
         real_data = Input(shape=(self.data_dim,), name='dec_ll_estimator_data_input')
         latent_encoding = Input(shape=(self.latent_dim,), name='dec_latent_input')
 
-        generator_body = repeat_dense(latent_encoding, num_layers=2, num_units=512, name_prefix='dec_body')
+        generator_body = repeat_dense(latent_encoding, num_layers=2, num_units=256, name_prefix='dec_body')
 
         sampler_params = Dense(self.data_dim, activation='sigmoid', name='dec_sampler_params')(generator_body)
 

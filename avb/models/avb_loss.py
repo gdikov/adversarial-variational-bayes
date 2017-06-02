@@ -23,7 +23,7 @@ class DiscriminatorLossLayer(Layer):
         loss = self.discriminator_loss(discrim_output_prior, discrim_output_posterior)
         self.add_loss(loss, inputs=inputs)
         # unused output
-        return inputs[0]
+        return loss
 
 
 class DecoderLossLayer(Layer):
@@ -47,4 +47,4 @@ class DecoderLossLayer(Layer):
         loss = self.decoder_loss(decoder_output_log_probs, discrim_output_posterior)
         self.add_loss(loss, inputs=inputs)
         # unused output
-        return inputs[0]
+        return loss

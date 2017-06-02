@@ -34,10 +34,10 @@ class Discriminator(object):
         discriminator_input_data = Input(shape=(data_dim,), name='disc_input_data')
         discriminator_input_latent = Input(shape=(latent_dim,), name='disc_input_latent')
 
-        discriminator_body_data = repeat_dense(discriminator_input_data, num_layers=2, num_units=512,
+        discriminator_body_data = repeat_dense(discriminator_input_data, num_layers=2, num_units=256,
                                                name_prefix='disc_body_data')
 
-        discriminator_body_latent = repeat_dense(discriminator_input_latent, num_layers=2, num_units=512,
+        discriminator_body_latent = repeat_dense(discriminator_input_latent, num_layers=2, num_units=256,
                                                  name_prefix='disc_body_latent')
 
         merged_data_latent = Dot(axes=1, name='disc_merge')([discriminator_body_data, discriminator_body_latent])
