@@ -4,21 +4,23 @@ import struct
 import sklearn.datasets.mldata as fetcher
 import numpy as np
 import logging
-np.random.seed(7)
+from utils.config import load_config
+
 logger = logging.getLogger(__name__)
+config = load_config("global_config.yaml")
+
+PROJECT_DATA_DIR = config['general']['data_dir']
+np.random.seed(config['general']['seed'])
 
 
-# FIXME: make it configurable
-PROJECT_DATA_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)), "..", "..", "data")
-
-
-def load_mnist(local_data_path=None, one_hot=True):
+def load_mnist(local_data_path=None, one_hot=True, binarised=True):
     """
     Load the MNIST dataset from local file or download it if not available.
     
     Args:
         local_data_path: path to the MNIST dataset. Assumes unpacked files and original filenames. 
         one_hot: bool whether tha data targets should be converted to one hot encoded labels
+        binarised: bool, whether the images should be ceiled/floored to 1 and 0 respectively.
 
     Returns:
         A dict with `data` and `target` keys with the MNIST data converted to [0, 1] floats. 
@@ -30,6 +32,13 @@ def load_mnist(local_data_path=None, one_hot=True):
         one_hot_target[np.arange(raw_target.shape[0]), raw_target.astype(np.int)] = 1
         return one_hot_target
 
+    def binarise(raw_data, mode='sampling', **kwargs):
+        if mode == 'sampling':
+            return np.random.binomial(1, p=raw_data).astype(np.int32)
+        elif mode == 'threshold':
+            threshold = kwargs.get('threshold', 0.3)
+            return (raw_data > threshold).astype(np.int32)
+
     if local_data_path is None:
         logger.info("Path to locally stored data not provided. Proceeding with downloading the MNIST dataset.")
         mnist_path = os.path.join(PROJECT_DATA_DIR, "MNIST")
@@ -37,20 +46,28 @@ def load_mnist(local_data_path=None, one_hot=True):
             mnist = fetcher.fetch_mldata("MNIST Original", data_home=mnist_path)
             if one_hot:
                 mnist.target = convert_to_one_hot(mnist.target)
+            if binarised:
+                mnist.data = binarise(mnist.data, mode='threshold', threshold=0.2)
             mnist = {'data': mnist.data, 'target': mnist.target}
         except urllib2.HTTPError:
             logger.warning("Fetching data from mldata.org failed. The server is probably unreachable. "
                            "Proceeding with fetching from Tensorflow.examples.tutorials.mnist.")
             from tensorflow.examples.tutorials.mnist import input_data
             mnist = input_data.read_data_sets(mnist_path, one_hot=one_hot)
-            mnist = {'data': np.concatenate((mnist.train.images, mnist.test.images, mnist.validation.images)),
-                     'target': np.concatenate((mnist.train.labels, mnist.test.labels, mnist.validation.labels))}
+            mnist_data = np.concatenate((mnist.train.images, mnist.test.images, mnist.validation.images))
+            mnist_labels = np.concatenate((mnist.train.labels, mnist.test.labels, mnist.validation.labels))
+            if binarised:
+                mnist_data = binarise(mnist_data, mode='threshold', threshold=0.2)
+            mnist = {'data': mnist_data,
+                     'target': mnist_labels}
     else:
         logger.info("Loading MNIST dataset from {}".format(local_data_path))
         if os.path.exists(local_data_path):
             mnist_imgs, mnist_labels = _load_mnist_from_file(local_data_path)
             if one_hot:
                 mnist_labels = convert_to_one_hot(mnist_labels)
+            if binarised:
+                mnist_imgs = binarise(mnist_imgs, mode='threshold', threshold=0.2)
             mnist = {'data': mnist_imgs, 'target': mnist_labels}
         else:
             logger.error("Path to locally stored MNIST does not exist.")
@@ -87,7 +104,7 @@ def _load_mnist_from_file(data_dir=None):
             images = np.fromfile(fimg, dtype=np.uint8).reshape(num, -1)
         return images
 
-    images = np.concatenate([read_images(fname) for fname in image_files])
+    images = np.concatenate([read_images(fname) for fname in image_files]) / 255.
     labels = np.concatenate([read_labels(fname) for fname in label_files])
 
     return images, labels
