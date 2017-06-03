@@ -2,7 +2,7 @@ import logging
 from keras.layers import Concatenate, Dense, Input
 from keras.models import Model
 
-from architectures import repeat_dense
+from architectures import synthetic_encoder
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +36,8 @@ class Encoder(object):
 
         data_input = Input(shape=(data_dim,), name='enc_input_data')
         noise_input = Input(shape=(noise_dim,), name='enc_input_noise')
-        encoder_input = Concatenate(axis=1, name='enc_data_noise_concat')([data_input, noise_input])
 
-        encoder_body = repeat_dense(encoder_input, num_layers=2, num_units=256, name_prefix='enc_body')
-
-        latent_factors = Dense(latent_dim, activation=None, name='enc_latent')(encoder_body)
+        latent_factors = synthetic_encoder([data_input, noise_input])
 
         self.encoder_model = Model(inputs=[data_input, noise_input], outputs=latent_factors, name='encoder')
 

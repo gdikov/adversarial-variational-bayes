@@ -1,6 +1,6 @@
 from keras.layers import Dense, Dot, Activation, Concatenate
 from keras.models import Model, Input
-from architectures import repeat_dense
+from architectures import synthetic_discriminator
 
 
 class Discriminator(object):
@@ -34,20 +34,9 @@ class Discriminator(object):
         discriminator_input_data = Input(shape=(data_dim,), name='disc_input_data')
         discriminator_input_latent = Input(shape=(latent_dim,), name='disc_input_latent')
 
-        discriminator_body_data = repeat_dense(discriminator_input_data, num_layers=2, num_units=256,
-                                               name_prefix='disc_body_data')
+        discriminator_body = synthetic_discriminator([discriminator_input_data, discriminator_input_latent])
 
-        discriminator_body_latent = repeat_dense(discriminator_input_latent, num_layers=2, num_units=256,
-                                                 name_prefix='disc_body_latent')
-
-        merged_data_latent = Dot(axes=1, name='disc_merge')([discriminator_body_data, discriminator_body_latent])
-        discriminator_output = Activation(activation='sigmoid', name='disc_output')(merged_data_latent)
-
-        # merged_data_latent = Concatenate(axis=1, name='disc_merge')([discriminator_input_data, discriminator_input_latent])
-        #
-        # discriminator_body = repeat_dense(merged_data_latent, num_layers=2, num_units=256, name_prefix='disc_body')
-        #
-        # discriminator_output = Dense(1, activation='sigmoid', name='disc_out')(discriminator_body)
+        discriminator_output = Activation(activation='sigmoid', name='disc_output')(discriminator_body)
 
         self.discriminator_model = Model(inputs=[discriminator_input_data, discriminator_input_latent],
                                          outputs=discriminator_output,
