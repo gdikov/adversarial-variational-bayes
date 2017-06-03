@@ -4,11 +4,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class AVBDataIterator:
-    def __init__(self, data, batch_size, shuffle=True, seed=None, noise_distribution='normal',
-                 input_noise_dim=None, prior_noise_dim=None):
-        self.batch_size = batch_size
+class DataIterator(object):
+    def __init__(self, data, batch_size, shuffle=True):
         self.shuffle = shuffle
+        self.batch_size = batch_size
         data_size = data.shape[0]
         n_batches = data_size / float(batch_size)
 
@@ -21,6 +20,12 @@ class AVBDataIterator:
         else:
             self.data = data
         self.n_batches = self.data.shape[0] // batch_size
+
+
+class AVBDataIterator(DataIterator):
+    def __init__(self, data, batch_size, shuffle=True, seed=None, noise_distribution='normal',
+                 input_noise_dim=None, prior_noise_dim=None):
+        super(AVBDataIterator, self).__init__(data, batch_size, shuffle=shuffle)
 
         self.input_noise_dim = input_noise_dim or data.shape[1]
         self.prior_noise_dim = prior_noise_dim

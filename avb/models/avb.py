@@ -16,8 +16,19 @@ np.random.seed(config['general']['seed'])
 
 
 class AdversarialVariationalBayes(object):
+    """
+    Adversarial Variational Bayes as per "Adversarial Variational Bayes, 
+    Unifying Variational Autoencoders with Generative Adversarial Networks, L. Mescheder et al., arXiv 2017".
+    """
     def __init__(self, data_dim, latent_dim=2, noise_dim=None, restore_models=None, deployable_models_only=False):
-
+        """
+        Args:
+            data_dim: int, flattened data dimensionality
+            latent_dim: int, flattened latent dimensionality
+            noise_dim: int, flattened noise, dimensionality
+            restore_models: str, directory with h5 and json files with the model weights and architecture
+            deployable_models_only: bool, whether only deployable models for inference and generation should be restored
+        """
         self.data_dim = data_dim
         self.noise_dim = noise_dim or data_dim
         self.latent_dim = latent_dim
@@ -27,10 +38,10 @@ class AdversarialVariationalBayes(object):
             if not deployable_models_only:
                 if 'trainable_encoderdecoder_model.h5' in restorable_models and \
                                 'trainable_discriminator_model.h5' in restorable_models:
-                    with open('trainable_encoderdecoder_model.json', 'r') as j:
+                    with open(os.path.join(restore_models, 'trainable_encoderdecoder_model.json'), 'r') as j:
                         self._avb_dec_train = model_from_json(j.read())
                     self._avb_dec_train.load_weights(os.path.join(restore_models, 'trainable_encoderdecoder_model.h5'))
-                    with open('trainable_discriminator_model.json', 'r') as j:
+                    with open(os.path.join(restore_models, 'trainable_discriminator_model.json'), 'r') as j:
                         self._avb_disc_train = model_from_json(j.read())
                     self._avb_disc_train.load_weights(os.path.join(restore_models, 'trainable_discriminator_model.h5'))
                 else:
@@ -38,10 +49,10 @@ class AdversarialVariationalBayes(object):
                                "and `trainable_discriminator_model.h5` in {}".format(restorable_models))
             if 'inference_model.h5' in restorable_models and \
                'generative_model.h5' in restorable_models:
-                    with open('inference_model.json', 'r') as j:
+                    with open(os.path.join(restore_models, 'inference_model.json'), 'r') as j:
                         self._inference_model = model_from_json(j.read())
                     self._inference_model.load_weights(os.path.join(restore_models, 'inference_model.h5'))
-                    with open('generative_model.json', 'r') as j:
+                    with open(os.path.join(restore_models, 'generative_model.json'), 'r') as j:
                         self._generative_model = model_from_json(j.read())
                     self._generative_model.load_weights(os.path.join(restore_models, 'generative_model.h5'))
             else:
@@ -85,9 +96,23 @@ class AdversarialVariationalBayes(object):
             self._generative_model = Model(inputs=prior_input, outputs=decoder(prior_input, is_learning=False))
 
     def fit(self, data, batch_size=32, epochs=1, discriminator_repetitions=1):
+        """
+        Fit the model to the training data.
+        
+        Args:
+            data: ndarray, data array of shape (N, data_dim)
+            batch_size: int, the number of samples to be used at one training pass
+            epochs: int, the number of epochs for training (whole size data iterations)
+            discriminator_repetitions: int, gives the number of iterations for the discriminator network 
+                for each batch training of the encoder-decoder network 
+
+        Returns:
+            The training history as a dict of lists of the epoch-wise losses.
+        """
         data_iterator, iters_per_epoch = iter_data(data, batch_size, mode='training', seed=config['general']['seed'],
                                                    latent_dim=self.latent_dim, input_noise_dim=self.noise_dim)
 
+        history = {'encoderdecoder_loss': [], 'discriminator_loss': []}
         epoch_loss = np.inf
         for ep in tqdm(xrange(epochs)):
             epoch_loss_history_encdec = []
@@ -105,14 +130,38 @@ class AdversarialVariationalBayes(object):
                 epoch_loss = current_epoch_loss
                 self.save(os.path.join(config['general']['temp_dir'], 'ep_{}_loss_{}'.format(ep, epoch_loss)),
                           deployable_models_only=False)
+            history['encoderdecoder_loss'].append(epoch_loss_history_encdec)
+            history['discriminator_loss'].append(epoch_loss_history_disc)
+
+        return history
 
     def infer(self, data, batch_size=32):
+        """
+        Infer latent factors given some data. 
+        
+        Args:
+            data: ndarray, data array of shape (N, data_dim) 
+            batch_size: int, the number of samples to be inferred at once
+
+        Returns:
+            The inferred latent factors as ndarray of shape (N, latent_dim) 
+        """
         data_iterator, n_iters = iter_data(data, batch_size, mode='inference', seed=config['general']['seed'],
                                            input_noise_dim=self.noise_dim)
         latent_samples = self._inference_model.predict_generator(data_iterator, steps=n_iters)
         return latent_samples
 
     def generate(self, n_samples, batch_size=32):
+        """
+        Sample new data from the generator network.
+        
+        Args:
+            n_samples: int, the number of samples to be generated 
+            batch_size: int, number of generated samples are once
+
+        Returns:
+            The generated data as ndarray of shape (n_samples, data_dim)
+        """
         n_samples_per_axis = complex(int(np.sqrt(n_samples)))
         data = np.mgrid[-300:100:n_samples_per_axis, -50:300:n_samples_per_axis].reshape(2, -1).T
         data_iterator, n_iters = iter_data(data, batch_size=batch_size, mode='generation',
@@ -122,6 +171,17 @@ class AdversarialVariationalBayes(object):
         return sampled_data
 
     def save(self, dirname, deployable_models_only=False, save_metainfo=False):
+        """
+        Save the weights of all AVB sub-models, so that training can be resumed. 
+         
+        Args:
+            dirname: str, path to the folder to store the weights
+            deployable_models_only: bool, whether only inference and generative models should be stored
+            save_metainfo: whether model architectures should be stored too.
+
+        Returns:
+            
+        """
         if not os.path.exists(dirname):
             os.makedirs(dirname)
         if not deployable_models_only:
