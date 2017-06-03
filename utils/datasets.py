@@ -32,22 +32,41 @@ def load_mnist(local_data_path=None, one_hot=True, binarised=True):
         one_hot_target[np.arange(raw_target.shape[0]), raw_target.astype(np.int)] = 1
         return one_hot_target
 
-    def binarise(raw_data, mode='sampling', **kwargs):
-        if mode == 'sampling':
-            return np.random.binomial(1, p=raw_data).astype(np.int32)
-        elif mode == 'threshold':
-            threshold = kwargs.get('threshold', 0.3)
-            return (raw_data > threshold).astype(np.int32)
+    # def binarise(raw_data, mode='sampling', **kwargs):
+    #     if mode == 'sampling':
+    #         return np.random.binomial(1, p=raw_data).astype(np.int32)
+    #     elif mode == 'threshold':
+    #         threshold = kwargs.get('threshold', 0.3)
+    #         return (raw_data > threshold).astype(np.int32)
 
-    if local_data_path is None:
+    if binarised:
+        binarized_mnist_path = os.path.join(PROJECT_DATA_DIR, 'binarized_MNIST')
+        if local_data_path is None and not os.path.exists(binarized_mnist_path):
+            logger.info("Downloading binarized MNIST dataset.")
+            datafiles = ["http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_train.amat",
+                         "http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_valid.amat",
+                         "http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_test.amat"]
+            os.makedirs(binarized_mnist_path)
+            for url_to_dataset, split in zip(datafiles, ['train', 'validation', 'test']):
+                downloaded_data = np.loadtxt(urllib2.urlopen(url_to_dataset))
+                np.save(os.path.join(binarized_mnist_path, 'binarized_mnist_{}.npy'.format(split)), downloaded_data)
+        mnist_data = []
+        logger.info("Loading binarized MNIST dataset.")
+        for dataset in os.listdir(binarized_mnist_path):
+            if dataset.endswith('npy'):
+                mnist_data.append(np.load(os.path.join(binarized_mnist_path, dataset)))
+        mnist_data = np.concatenate(mnist_data, axis=0)
+        digit_distribution = [6903, 7877, 6990, 7141, 6824, 6313, 6876, 7293, 6825, 6958]
+        mnist_targets = np.concatenate([np.repeat(i, n) for i, n in enumerate(digit_distribution)])
+        return {'data': mnist_data, 'target': mnist_targets}
+
+    mnist_path = os.path.join(PROJECT_DATA_DIR, "MNIST")
+    if local_data_path is None and not os.path.exists(mnist_path):
         logger.info("Path to locally stored data not provided. Proceeding with downloading the MNIST dataset.")
-        mnist_path = os.path.join(PROJECT_DATA_DIR, "MNIST")
         try:
             mnist = fetcher.fetch_mldata("MNIST Original", data_home=mnist_path)
             if one_hot:
                 mnist.target = convert_to_one_hot(mnist.target)
-            if binarised:
-                mnist.data = binarise(mnist.data, mode='threshold', threshold=0.2)
             mnist = {'data': mnist.data, 'target': mnist.target}
         except urllib2.HTTPError:
             logger.warning("Fetching data from mldata.org failed. The server is probably unreachable. "
@@ -56,18 +75,15 @@ def load_mnist(local_data_path=None, one_hot=True, binarised=True):
             mnist = input_data.read_data_sets(mnist_path, one_hot=one_hot)
             mnist_data = np.concatenate((mnist.train.images, mnist.test.images, mnist.validation.images))
             mnist_labels = np.concatenate((mnist.train.labels, mnist.test.labels, mnist.validation.labels))
-            if binarised:
-                mnist_data = binarise(mnist_data, mode='threshold', threshold=0.2)
             mnist = {'data': mnist_data,
                      'target': mnist_labels}
     else:
+        local_data_path = local_data_path or mnist_path
         logger.info("Loading MNIST dataset from {}".format(local_data_path))
         if os.path.exists(local_data_path):
             mnist_imgs, mnist_labels = _load_mnist_from_file(local_data_path)
             if one_hot:
                 mnist_labels = convert_to_one_hot(mnist_labels)
-            if binarised:
-                mnist_imgs = binarise(mnist_imgs, mode='threshold', threshold=0.2)
             mnist = {'data': mnist_imgs, 'target': mnist_labels}
         else:
             logger.error("Path to locally stored MNIST does not exist.")
