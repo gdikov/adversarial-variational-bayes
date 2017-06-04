@@ -37,7 +37,7 @@ class Encoder(object):
         data_input = Input(shape=(data_dim,), name='enc_input_data')
         noise_input = Input(shape=(noise_dim,), name='enc_input_noise')
 
-        latent_factors = synthetic_encoder([data_input, noise_input])
+        latent_factors = synthetic_encoder([data_input, noise_input], latent_dim)
 
         self.encoder_model = Model(inputs=[data_input, noise_input], outputs=latent_factors, name='encoder')
 

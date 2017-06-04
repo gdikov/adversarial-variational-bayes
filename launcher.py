@@ -13,7 +13,7 @@ if __name__ == '__main__':
     data_dim = 4
     data = load_npoints(n=data_dim)
     # data_dim = 28*28
-    # data = load_mnist("data/MNIST/", binarised=True, one_hot=False)
+    # data = load_mnist(binarised=True, one_hot=False)
 
     train_data, train_labels = data['data'], data['target']
 
@@ -24,5 +24,5 @@ if __name__ == '__main__':
     latent_vars = avb.infer(train_data, batch_size=512)
     plot_latent_2d(latent_vars, train_labels, fig_dirpath='data/')
 
-    generations = avb.generate(n_samples=100, batch_size=100)
-    plot_sampled_data(generations, sample_side_size=2, fig_dirpath='data/')
+    # generations = train_data[2000:3000]#avb.generate(n_samples=100, batch_size=100)
+    # plot_sampled_data(generations, sample_side_size=28, fig_dirpath='data/')
