@@ -3,11 +3,11 @@ import os
 from tqdm import tqdm
 
 from keras.models import Model, Input, model_from_json
-from keras.optimizers import Adam as Optimiser
+from keras.optimizers import Adam
 from freezable_model import FreezableModel
 
 from networks import Encoder, Decoder, Discriminator
-from .avb_loss import DiscriminatorLossLayer, DecoderLossLayer
+from .losses import AVBDiscriminatorLossLayer, AVBEncoderDecoderLossLayer
 from ..data_iterator import iter_data
 from utils.config import load_config
 
@@ -72,10 +72,10 @@ class AdversarialVariationalBayes(object):
             discriminator_output_prior = discriminator([data_input, prior_input])
             discriminator_output_posterior = discriminator([data_input, posterior_approximation])
 
-            discriminator_loss = DiscriminatorLossLayer(name='disc_loss')([discriminator_output_prior,
-                                                                           discriminator_output_posterior])
-            decoder_loss = DecoderLossLayer(name='dec_loss')([reconstruction_log_likelihood,
-                                                              discriminator_output_posterior])
+            discriminator_loss = AVBDiscriminatorLossLayer(name='disc_loss')([discriminator_output_prior,
+                                                                              discriminator_output_posterior])
+            decoder_loss = AVBEncoderDecoderLossLayer(name='dec_loss')([reconstruction_log_likelihood,
+                                                                        discriminator_output_posterior])
 
             # define the trainable models
             self._avb_disc_train = FreezableModel(inputs=[data_input, noise_input, prior_input],
@@ -85,13 +85,13 @@ class AdversarialVariationalBayes(object):
 
             self._avb_disc_train.freeze()
             self._avb_dec_train.unfreeze()
-            self._avb_dec_train.compile(optimizer=Optimiser(lr=1e-3, beta_1=0.5), loss=None)
+            self._avb_dec_train.compile(optimizer=Adam(lr=1e-3, beta_1=0.5), loss=None)
 
             self._avb_disc_train.unfreeze()
             self._avb_dec_train.freeze()
-            self._avb_disc_train.compile(optimizer=Optimiser(lr=1e-3, beta_1=0.5), loss=None)
+            self._avb_disc_train.compile(optimizer=Adam(lr=1e-3, beta_1=0.5), loss=None)
 
-            # define the deployable model (evaluation only)
+            # define the deployable models (for evaluation purposes only)
             self._inference_model = Model(inputs=[data_input, noise_input], outputs=posterior_approximation)
             self._generative_model = Model(inputs=prior_input, outputs=decoder(prior_input, is_learning=False))
 

@@ -3,10 +3,10 @@ from keras.layers import Layer
 from keras.losses import binary_crossentropy
 
 
-class DiscriminatorLossLayer(Layer):
+class AVBDiscriminatorLossLayer(Layer):
     def __init__(self, **kwargs):
         self.is_placeholder = True
-        super(DiscriminatorLossLayer, self).__init__(**kwargs)
+        super(AVBDiscriminatorLossLayer, self).__init__(**kwargs)
         # self.trainable = False
 
     @staticmethod
@@ -26,10 +26,10 @@ class DiscriminatorLossLayer(Layer):
         return loss
 
 
-class DecoderLossLayer(Layer):
+class AVBEncoderDecoderLossLayer(Layer):
     def __init__(self, **kwargs):
         self.is_placeholder = True
-        super(DecoderLossLayer, self).__init__(**kwargs)
+        super(AVBEncoderDecoderLossLayer, self).__init__(**kwargs)
         # self.trainable = False
 
     @staticmethod
@@ -45,6 +45,32 @@ class DecoderLossLayer(Layer):
     def call(self, inputs, **kwargs):
         decoder_output_log_probs, discrim_output_posterior = inputs
         loss = self.decoder_loss(decoder_output_log_probs, discrim_output_posterior)
+        self.add_loss(loss, inputs=inputs)
+        # unused output
+        return loss
+
+
+class VAELossLayer(Layer):
+    def __init__(self, **kwargs):
+        self.is_placeholder = True
+        super(VAELossLayer, self).__init__(**kwargs)
+
+    @staticmethod
+    def vae_loss(data_log_probs, mean, log_var):
+        # 1/m * sum_{i=1}^m log p(x_i|z), where z = encoder(x_i, epsilon_i)
+        reconstruction_log_likelihood = ker.mean(ker.sum(data_log_probs, axis=1))
+        # The decoder tries to maximise the reconstruction data log-likelihood, hence the minus sign
+        decoder_loss = -reconstruction_log_likelihood
+        # The encoder loss, i.e. the analytically solvable KL term in the ELBO for multivariate Normal distributions
+        # is D_KL(N_0 || N_1) = 0.5 * [tr(Sigma_1^-1 * Sigma_0) + (mu_1 - mu_0)^T Sigma_1^-1 (mu_1 - mu_0) - k
+        #                              + ln(det(Sigma_1) / det(Sigma_0))]
+        # where k is the dimensionality of the MVNs, and in the VAE case Sigma_1 = I_k and mu_1 = 0
+        encoder_loss = -0.5 * ker.sum(1 - ker.square(mean) - ker.exp(log_var) + log_var, axis=-1)
+        return ker.mean(encoder_loss + decoder_loss)
+
+    def call(self, inputs, **kwargs):
+        decoder_output_log_probs, mean, log_var = inputs
+        loss = self.vae_loss(decoder_output_log_probs, mean, log_var)
         self.add_loss(loss, inputs=inputs)
         # unused output
         return loss

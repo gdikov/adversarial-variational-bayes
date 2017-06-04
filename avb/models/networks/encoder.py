@@ -1,6 +1,5 @@
 import logging
-from keras.layers import Concatenate, Dense, Input
-from keras.models import Model
+from keras.models import Model, Input
 
 from architectures import synthetic_encoder
 
