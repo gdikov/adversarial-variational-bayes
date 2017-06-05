@@ -29,5 +29,10 @@ coverage.xml
 # Notes
 NOTES.txt
 
-# logs and debug
+# logs and temp and models
 logs/
+tmp/
+models/
+
+# temporary disable third-party free software upload unless you make sure the LICENSE permits uploading it.
+third-party/
