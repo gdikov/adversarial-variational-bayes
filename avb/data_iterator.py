@@ -5,9 +5,21 @@ logger = logging.getLogger(__name__)
 
 
 class DataIterator(object):
-    def __init__(self, data, batch_size, shuffle=True):
-        self.shuffle = shuffle
-        self.batch_size = batch_size
+    def __init__(self, seed, data_dim, latent_dim, noise_dim=None, noise_distribution='normal'):
+        np.random.seed(seed)
+        self.data_dim = data_dim
+        self.noise_dim = noise_dim or latent_dim
+        self.latent_dim = latent_dim
+
+        if noise_distribution == 'normal':
+            self.noise_sampler = np.random.standard_normal
+        elif noise_distribution == 'uniform':
+            self.noise_sampler = np.random.uniform
+        else:
+            raise ValueError("Unsupported noise distribution type: {}".format(noise_distribution))
+
+    @staticmethod
+    def tailor_data_size(data, batch_size):
         data_size = data.shape[0]
         n_batches = data_size / float(batch_size)
 
@@ -16,72 +28,58 @@ class DataIterator(object):
             logger.warning("The dataset cannot be iterated in epochs completely with the current batch size "
                            "and it will be automatically augmented with {} more samples.".format(additional_samples))
             additional_samples_indices = np.random.choice(data_size, size=additional_samples)
-            self.data = np.concatenate([data, data[additional_samples_indices]], axis=0)
+            altered_data = np.concatenate([data, data[additional_samples_indices]], axis=0)
         else:
-            self.data = data
-        self.n_batches = self.data.shape[0] // batch_size
+            altered_data = data
+        n_batches = altered_data.shape[0] // batch_size
+        return altered_data, n_batches
+
+    def iter_data_inference(self, data, n_batches, **kwargs):
+        raise NotImplementedError
+
+    def iter_data_generation(self, data, n_batches,  **kwargs):
+        raise NotImplementedError
+
+    def iter_data_training(self, data, n_batches,  **kwargs):
+        raise NotImplementedError
+
+    def iter(self, data, batch_size, mode='training', **kwargs):
+        altered_data, n_batches = self.tailor_data_size(data, batch_size=batch_size)
+        iterator = getattr(self, 'iter_data_{}'.format(mode))
+        return iterator(altered_data, n_batches, **kwargs), n_batches
 
 
 class AVBDataIterator(DataIterator):
-    def __init__(self, data, batch_size, shuffle=True, seed=None, noise_distribution='normal',
-                 input_noise_dim=None, prior_noise_dim=None):
-        super(AVBDataIterator, self).__init__(data, batch_size, shuffle=shuffle)
+    def __init__(self, data_dim, latent_dim, noise_dim, seed=7, noise_distribution='normal'):
+        super(AVBDataIterator, self).__init__(seed=seed, data_dim=data_dim, latent_dim=latent_dim,
+                                              noise_dim=noise_dim, noise_distribution=noise_distribution)
 
-        self.input_noise_dim = input_noise_dim or data.shape[1]
-        self.prior_noise_dim = prior_noise_dim
-        np.random.seed(seed)
-        if noise_distribution == 'normal':
-            self.noise_sampler = np.random.standard_normal
-        elif noise_distribution == 'uniform':
-            self.noise_sampler = np.random.uniform
-        else:
-            raise ValueError("Unsupported noise distribution type: {}".format(noise_distribution))
-
-    def iter_data_training(self):
-        if self.prior_noise_dim is None:
-            raise ValueError("Prior noise dimensionality must be initialised when iterating in training mode.")
-
+    def iter_data_training(self, data, n_batches, **kwargs):
+        shuffle = kwargs.get('shuffle', True)
+        data_size = data.shape[0]
+        batch_size = data_size // n_batches
         while True:
-            indices_new_order = np.arange(self.data.shape[0])
-            if self.shuffle:
+            indices_new_order = np.arange(data_size)
+            if shuffle:
                 np.random.shuffle(indices_new_order)
-            batches_indices = np.split(indices_new_order, self.n_batches)
+            batches_indices = np.split(indices_new_order, n_batches)
             # run for 1 epoch
             for batch_indices in batches_indices:
-                random_noise_data = self.noise_sampler(size=(self.batch_size, self.input_noise_dim))
-                random_noise_prior = self.noise_sampler(size=(self.batch_size, self.prior_noise_dim))
-                yield [self.data[batch_indices], random_noise_data, random_noise_prior]
+                random_noise_data = self.noise_sampler(size=(batch_size, self.noise_dim))
+                random_noise_prior = self.noise_sampler(size=(batch_size, self.latent_dim))
+                yield [data[batch_indices], random_noise_data, random_noise_prior]
 
-    def iter_data_inference(self):
-        if self.shuffle:
-            logger.warning("Shuffling while iterating in inference mode doesn't make sense and will be skipped.")
+    def iter_data_inference(self, data, n_batches, **kwargs):
+        data_size = data.shape[0]
+        batch_size = data_size // n_batches
         while True:
-            for batch_indices in np.split(np.arange(self.data.shape[0]), self.n_batches):
-                random_noise_data = self.noise_sampler(size=(self.batch_size, self.input_noise_dim))
-                yield [self.data[batch_indices], random_noise_data]
+            for batch_indices in np.split(np.arange(data_size), n_batches):
+                random_noise_data = self.noise_sampler(size=(batch_size, self.noise_dim))
+                yield [data[batch_indices], random_noise_data]
 
-    def iter_data_generation(self):
-        if self.shuffle:
-            logger.warning("Shuffling while iterating in generation mode doesn't make sense and will be skipped.")
+    def iter_data_generation(self, data, n_batches, **kwargs):
         while True:
-            for batch_indices in np.split(np.arange(self.data.shape[0]), self.n_batches):
-                yield self.data[batch_indices]
+            for batch_indices in np.split(np.arange(data.shape[0]), n_batches):
+                yield data[batch_indices]
 
-
-def iter_data(data=None, batch_size=32, mode='training', **kwargs):
-    seed = kwargs.get('seed', 7)
-    input_noise_dim = kwargs.get('input_noise_dim', data.shape[1])
-    if mode == 'inference':
-        data_iterator = AVBDataIterator(data=data, batch_size=batch_size, shuffle=False, seed=seed,
-                                        noise_distribution='normal', input_noise_dim=input_noise_dim)
-
-        return data_iterator.iter_data_inference(), data_iterator.n_batches
-    elif mode == 'generation':
-        data_iterator = AVBDataIterator(data=data, batch_size=batch_size, shuffle=False)
-        return data_iterator.iter_data_generation(), data_iterator.n_batches
-    elif mode == 'training':
-        latent_dim = kwargs.get('latent_dim')
-        data_iterator = AVBDataIterator(data=data, batch_size=batch_size, shuffle=True,
-                                        seed=seed, noise_distribution='normal',
-                                        input_noise_dim=input_noise_dim, prior_noise_dim=latent_dim)
-        return data_iterator.iter_data_training(), data_iterator.n_batches
+VAEDataIterator = AVBDataIterator

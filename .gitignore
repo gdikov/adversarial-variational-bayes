@@ -16,18 +16,25 @@ coverage.xml
 
 # IPython Notebook
 .ipynb_checkpoints
+*.ipynb
 
 # virtualenv
 .python2
+.python3
 
 # PyCharm project settings
 .idea
 
 # Large datasets
-# data/
+data/
 
 # Notes
 NOTES.txt
 
-# logs and debug
+# logs and temp and models
 logs/
+tmp/
+models/
+
+# temporary disable third-party free software upload unless you make sure the LICENSE permits uploading it.
+third-party/

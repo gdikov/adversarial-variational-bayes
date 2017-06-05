@@ -61,12 +61,20 @@ def residual_connection(inputs, output_shape, n_hidden):
 """ Architectures for reproducing paper experiments on the synthetic 4-points dataset. """
 
 
-def synthetic_encoder(inputs):
+def synthetic_encoder(inputs, latent_dim):
     data_input, noise_input = inputs
     encoder_input = Concatenate(axis=1, name='enc_data_noise_concat')([data_input, noise_input])
     encoder_body = repeat_dense(encoder_input, n_layers=2, n_units=256, name_prefix='enc_body')
-    latent_factors = Dense(encoder_body, activation=None, name='enc_latent')(encoder_body)
+    latent_factors = Dense(latent_dim, activation=None, name='enc_latent')(encoder_body)
     return latent_factors
+
+
+def synthetic_reparametrized_encoder(inputs, latent_dim):
+    encoder_body = repeat_dense(inputs, n_layers=2, n_units=256, name_prefix='rep_enc_body')
+    latent_mean = Dense(latent_dim, activation=None, name='rep_enc_mean')(encoder_body)
+    # since the variance must be positive and this is not easy to restrict, interpret it in the log domain
+    latent_log_var = Dense(latent_dim, activation=None, name='rep_enc_var')(encoder_body)
+    return latent_mean, latent_log_var
 
 
 def synthetic_decoder(inputs):
