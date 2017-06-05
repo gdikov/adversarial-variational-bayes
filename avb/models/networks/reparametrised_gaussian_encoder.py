@@ -3,7 +3,7 @@ from keras.layers import Dense, Input, Lambda
 from keras.models import Model
 from keras.backend import exp
 
-from architectures import synthetic_encoder
+from architectures import synthetic_reparametrized_encoder
 
 logger = logging.getLogger(__name__)
 
@@ -35,16 +35,13 @@ class ReparametrisedGaussianEncoder(object):
         data_input = Input(shape=(data_dim,), name='rep_enc_input_data')
         noise_input = Input(shape=(noise_dim,), name='rep_enc_input_noise')
 
-        encoder_body = synthetic_encoder([data_input, noise_input], latent_dim)
-        latent_mean = Dense(latent_dim, activation=None, name='rep_enc_mean')(encoder_body)
-        # since the variance must be positive and this is not easy to restrict, interpret it in the log domain
-        latent_log_var = Dense(latent_dim, activation=None, name='rep_enc_var')(encoder_body)
+        latent_mean, latent_log_var = synthetic_reparametrized_encoder(data_input, latent_dim)
 
         latent_factors = Lambda(lambda x: x[0] + exp(x[1] / 2.0) * x[2],
                                 name='rep_enc_reparametrised_latent')([latent_mean, latent_log_var, noise_input])
 
         self.encoder_inference_model = Model(inputs=[data_input, noise_input], outputs=latent_factors,
-                                   name='reparametrised_encoder')
+                                             name='reparametrised_encoder')
         self.encoder_learning_model = Model(inputs=[data_input, noise_input],
                                             outputs=[latent_factors, latent_mean, latent_log_var])
 
