@@ -2,7 +2,7 @@ import numpy as np
 import os
 from tqdm import tqdm
 
-from keras.optimizers import Adam
+from keras.optimizers import RMSprop
 from ..models.freezable import FreezableModel
 from ..models.base_vae import BaseVariationalAutoencoder
 
@@ -64,11 +64,11 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
 
             self.avb_trainable_discriminator.freeze()
             self.avb_trainable_encoder_decoder.unfreeze()
-            self.avb_trainable_encoder_decoder.compile(optimizer=Adam(lr=1e-3, beta_1=0.5), loss=None)
+            self.avb_trainable_encoder_decoder.compile(optimizer=RMSprop(lr=1e-3), loss=None)
 
             self.avb_trainable_discriminator.unfreeze()
             self.avb_trainable_encoder_decoder.freeze()
-            self.avb_trainable_discriminator.compile(optimizer=Adam(lr=1e-3, beta_1=0.5), loss=None)
+            self.avb_trainable_discriminator.compile(optimizer=RMSprop(lr=1e-3), loss=None)
 
         self.models_dict['trainable']['avb_trainable_encoder_decoder'] = self.avb_trainable_encoder_decoder
         self.models_dict['trainable']['avb_trainable_discriminator'] = self.avb_trainable_discriminator

@@ -4,7 +4,7 @@ from losses import VAELossLayer
 from ..models import BaseVariationalAutoencoder
 
 from keras.models import Model
-from keras.optimizers import Adam
+from keras.optimizers import RMSprop
 from ..data_iterator import VAEDataIterator
 from utils.config import load_config
 
@@ -35,7 +35,7 @@ class GaussianVariationalAutoencoder(BaseVariationalAutoencoder):
             reconstruction_log_likelihood = self.decoder([self.data_input, posterior_approximation], is_learning=True)
             vae_loss = VAELossLayer(name='vae_loss')([reconstruction_log_likelihood, latent_mean, latent_log_var])
             self.vae_model = Model(inputs=[self.data_input, self.noise_input], outputs=vae_loss)
-            self.vae_model.compile(optimizer=Adam(lr=1e-3), loss=None)
+            self.vae_model.compile(optimizer=RMSprop(lr=1e-3), loss=None)
 
         self.models_dict['trainable']['vae_model'] = self.vae_model
         self.data_iterator = VAEDataIterator(data_dim=data_dim, latent_dim=latent_dim, noise_dim=latent_dim,

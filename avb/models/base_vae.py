@@ -39,12 +39,12 @@ class BaseVariationalAutoencoder(object):
             self.latent_prior_input = Input(shape=(latent_dim,), name='{}_latent_prior_input'.format(name_prefix))
 
             # define the deployable models (for evaluation purposes only)
-            self._inference_model = Model(inputs=[self.data_input, self.noise_input],
-                                          outputs=self.encoder([self.data_input, self.noise_input], is_learning=False))
-            self._generative_model = Model(inputs=self.latent_prior_input, outputs=self.decoder(self.latent_prior_input,
-                                                                                                is_learning=False))
-            self.models_dict['deployable']['inference_model'] = self._inference_model
-            self.models_dict['deployable']['generative_model'] = self._generative_model
+            self.inference_model = Model(inputs=[self.data_input, self.noise_input],
+                                         outputs=self.encoder([self.data_input, self.noise_input], is_learning=False))
+            self.generative_model = Model(inputs=self.latent_prior_input, outputs=self.decoder(self.latent_prior_input,
+                                                                                               is_learning=False))
+            self.models_dict['deployable']['inference_model'] = self.inference_model
+            self.models_dict['deployable']['generative_model'] = self.generative_model
 
     def fit(self, data, batch_size=32, epochs=1, **kwargs):
         """
@@ -74,7 +74,7 @@ class BaseVariationalAutoencoder(object):
         if not hasattr(self, 'data_iterator'):
             raise AttributeError("Initialise the data iterator in the child classes first!")
         data_iterator, n_iters = self.data_iterator.iter(data, batch_size, mode='inference')
-        latent_samples = self._inference_model.predict_generator(data_iterator, steps=n_iters)
+        latent_samples = self.inference_model.predict_generator(data_iterator, steps=n_iters)
         return latent_samples
 
     def generate(self, n_samples, batch_size=32, **kwargs):
@@ -93,7 +93,7 @@ class BaseVariationalAutoencoder(object):
         n_samples_per_axis = complex(int(np.sqrt(n_samples)))
         data = np.mgrid[-300:100:n_samples_per_axis, -50:300:n_samples_per_axis].reshape(2, -1).T
         data_iterator, n_iters = self.data_iterator.iter(data, batch_size=batch_size, mode='generation')
-        data_probs = self._generative_model.predict_generator(data_iterator, steps=n_iters)
+        data_probs = self.generative_model.predict_generator(data_iterator, steps=n_iters)
         sampled_data = np.random.binomial(1, p=data_probs)
         return sampled_data
 
