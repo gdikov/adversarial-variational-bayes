@@ -16,15 +16,17 @@ coverage.xml
 
 # IPython Notebook
 .ipynb_checkpoints
+*.ipynb
 
 # virtualenv
 .python2
+.python3
 
 # PyCharm project settings
 .idea
 
 # Large datasets
-# data/
+data/
 
 # Notes
 NOTES.txt
