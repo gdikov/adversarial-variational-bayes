@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.stats import norm as standard_gaussian
 import os
 
 from keras.models import Model, Input, model_from_json
@@ -91,8 +92,9 @@ class BaseVariationalAutoencoder(object):
         if not hasattr(self, 'data_iterator'):
             raise AttributeError("Initialise the data iterator in the child classes first!")
         n_samples_per_axis = complex(int(np.sqrt(n_samples)))
-        data = np.mgrid[-300:100:n_samples_per_axis, -50:300:n_samples_per_axis].reshape(2, -1).T
-        data_iterator, n_iters = self.data_iterator.iter(data, batch_size=batch_size, mode='generation')
+        uniform_grid = np.mgrid[0.01:0.99:n_samples_per_axis, 0.01:0.99:n_samples_per_axis].reshape(2, -1).T
+        gaussian_grid = standard_gaussian.ppf(uniform_grid)
+        data_iterator, n_iters = self.data_iterator.iter(gaussian_grid, batch_size=batch_size, mode='generation')
         data_probs = self.generative_model.predict_generator(data_iterator, steps=n_iters)
         sampled_data = np.random.binomial(1, p=data_probs)
         return sampled_data
