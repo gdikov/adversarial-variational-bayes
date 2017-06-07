@@ -1,6 +1,5 @@
-from avb.model_trainer import AVBModelTrainer
-from avb.models.avb import AdversarialVariationalBayes
-from avb.models.vanilla_vae import GaussianVariationalAutoencoder
+from avb.model_trainer import AVBModelTrainer, VAEModelTrainer
+from avb.models import AdversarialVariationalBayes, GaussianVariationalAutoencoder
 from utils.datasets import load_npoints, load_mnist
 from utils.visualisation import plot_latent_2d, plot_sampled_data
 
@@ -18,12 +17,12 @@ if __name__ == '__main__':
 
     train_data, train_labels = data['data'], data['target']
 
-    # vae = GaussianVariationalAutoencoder(data_dim=data_dim, latent_dim=2)
-    # vae.fit(train_data, batch_size=1024, epochs=2000)
+    # trainer = VAEModelTrainer(data_dim=data_dim, latent_dim=2, experiment_name='mnist', overwrite=True)
+    # trainer.run_training(train_data, batch_size=1024, epochs=2000)
 
     trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=2, noise_dim=data_dim, experiment_name='mnist',
                               overwrite=True)
-    model_dir = trainer.run_training(train_data, batch_size=10000, epochs=1000)
+    model_dir = trainer.run_training(train_data, batch_size=1024, epochs=2000)
     trained_model = trainer.get_model()
 
     latent_vars = trained_model.infer(train_data, batch_size=10000)

@@ -5,7 +5,7 @@ from datetime import datetime
 from numpy import argmin, savez, asscalar
 from utils.config import load_config
 
-from avb.models.avb import AdversarialVariationalBayes
+from avb.models import AdversarialVariationalBayes, GaussianVariationalAutoencoder
 
 config = load_config('global_config.yaml')
 logger = logging.getLogger(__name__)
@@ -141,7 +141,7 @@ class ModelTrainer(object):
 
 class AVBModelTrainer(ModelTrainer):
     """
-    ModerlTrainer instance for the AVBModel.
+    ModelTrainer instance for the AVBModel.
     """
     def __init__(self, data_dim, latent_dim, noise_dim, experiment_name, schedule=None, overwrite=True):
         """
@@ -173,4 +173,38 @@ class AVBModelTrainer(ModelTrainer):
         """
         loss_hisotry = self.model.fit(data, batch_size, epochs=epochs,
                                       discriminator_repetitions=self.schedule['iter_discr'])
+        return loss_hisotry
+
+
+class VAEModelTrainer(ModelTrainer):
+    """
+    ModelTrainer instance for the GaussianVariationalAutoencoder (as per [TODO: add citation to Kingma, Welling]).
+    """
+
+    def __init__(self, data_dim, latent_dim, experiment_name, overwrite=True):
+        """
+        Args:
+            data_dim: int, flattened data dimensionality 
+            latent_dim: int, flattened latent dimensionality
+            experiment_name: str, name of the training/experiment for logging purposes
+            overwrite: bool, whether to overwrite the existing trained model with the same experiment_name
+        """
+        vae = GaussianVariationalAutoencoder(data_dim=data_dim, latent_dim=latent_dim)
+        super(VAEModelTrainer, self).__init__(model=vae, experiment_name=experiment_name, overwrite=overwrite)
+
+    def fit_model(self, data, batch_size, epochs, **kwargs):
+        """
+        Fit the GaussianVAE to the training data.
+
+        Args:
+            data: ndarray, training data
+            batch_size: int, batch size
+            epochs: int, number of epochs
+
+        Keyword Args:
+
+        Returns:
+            A loss history dict with the encoder-decoder loss.
+        """
+        loss_hisotry = self.model.fit(data, batch_size, epochs=epochs)
         return loss_hisotry
