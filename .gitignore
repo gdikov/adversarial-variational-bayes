@@ -33,8 +33,7 @@ NOTES.txt
 
 # logs and temp and models
 logs/
-tmp/
-models/
+output/
 
-# temporary disable third-party free software upload unless you make sure the LICENSE permits uploading it.
-third-party/
+# temporary disable third_party free software upload unless you make sure the LICENSE permits uploading it.
+third_party/

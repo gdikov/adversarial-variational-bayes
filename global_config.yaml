@@ -2,9 +2,9 @@
 general:
   seed: 7
   data_dir: data
-  logs_dir: logs
-  temp_dir: tmp
-  models_dir: models
+  logs_dir: output/logs
+  temp_dir: output/tmp
+  models_dir: output/models
 
 experiment:
   load_pretrained: False
