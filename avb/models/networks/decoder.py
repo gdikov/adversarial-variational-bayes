@@ -2,7 +2,7 @@ from tensorflow.contrib.distributions import Bernoulli
 from keras.layers import Lambda, Dense
 from keras.models import Model, Input
 
-from architectures import synthetic_decoder
+from architectures import get_network_by_name
 
 
 class Decoder(object):
@@ -25,11 +25,12 @@ class Decoder(object):
     Note that the reconstruction loss is not used when the model training ends. It serves only the purpose to 
     define a measure of loss which is optimised. 
     """
-    def __init__(self, latent_dim, data_dim):
+    def __init__(self, latent_dim, data_dim, network_architecture='synthetic'):
         """
         Args:
             latent_dim: int, the flattened dimensionality of the latent space 
             data_dim: int, the flattened dimensionality of the output space (data space)
+            network_architecture: str, the architecture name for the body of the Decoder model
         """
         self.latent_dim = latent_dim
         self.data_dim = data_dim
@@ -40,7 +41,7 @@ class Decoder(object):
         real_data = Input(shape=(self.data_dim,), name='dec_ll_estimator_data_input')
         latent_encoding = Input(shape=(self.latent_dim,), name='dec_latent_input')
 
-        generator_body = synthetic_decoder(latent_encoding)
+        generator_body = get_network_by_name['decoder'][network_architecture](latent_encoding)
 
         sampler_params = Dense(self.data_dim, activation='sigmoid', name='dec_sampler_params')(generator_body)
 

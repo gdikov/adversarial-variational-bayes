@@ -1,3 +1,5 @@
+import keras.backend as ker
+
 from keras.layers import Dense, Conv2DTranspose, Conv2D, Concatenate, Dot, Reshape, LocallyConnected1D
 from math import sqrt
 
@@ -110,6 +112,7 @@ def mnist_encoder(inputs, latent_dim=8):
     coefficients = Reshape((-1,))(coefficients)
     coefficients = Dense(latent_dim)(coefficients)
 
+    empirical_mean = ker.mean(ker.sum(), axis=0)
     linear_combination = Dot(axes=-1)([noise_basis_vectors, coefficients])
     return linear_combination
 
@@ -130,3 +133,12 @@ def mnist_discriminator(inputs):
     discriminator_input = Concatenate(axis=1, name='disc_data_noise_concat')([data_input, noise_input])
     discriminator_body = repeat_dense(discriminator_input, n_layers=4, n_units=1024, name_prefix='disc_body')
     return discriminator_body
+
+
+get_network_by_name = {'encoder': {'synthetic': synthetic_encoder,
+                                   'mnist': mnist_encoder},
+                       'reparametrised_encoder': {'synthetic': synthetic_reparametrized_encoder},
+                       'decoder': {'synthetic': synthetic_decoder,
+                                   'mnist': mnist_decoder},
+                       'discriminator': {'synthetic': synthetic_discriminator,
+                                         'mnist': mnist_discriminator}}

@@ -5,18 +5,22 @@ logger = logging.getLogger(__name__)
 
 
 class DataIterator(object):
-    def __init__(self, seed, data_dim, latent_dim, noise_dim=None, noise_distribution='normal'):
+    def __init__(self, seed, data_dim, latent_dim, noise_dim=None, prior_distribution='standard_normal'):
         np.random.seed(seed)
         self.data_dim = data_dim
         self.noise_dim = noise_dim or latent_dim
         self.latent_dim = latent_dim
 
-        if noise_distribution == 'normal':
-            self.noise_sampler = np.random.standard_normal
-        elif noise_distribution == 'uniform':
-            self.noise_sampler = np.random.uniform
+        self.data_noise_sampler = np.random.standard_normal
+        if prior_distribution == 'standard_normal':
+            self.prior_sampler = np.random.standard_normal
+        elif prior_distribution == 'adaptive_normal':
+            self.prior_sampler = lambda n, mean, var: np.repeat(mean, noise_dim) \
+                                                      + np.sqrt(var) * np.random.standard_normal(n)
+        elif prior_distribution == 'uniform':
+            self.prior_sampler = np.random.uniform
         else:
-            raise ValueError("Unsupported noise distribution type: {}".format(noise_distribution))
+            raise ValueError("Unsupported noise distribution type: {}".format(prior_distribution))
 
     @staticmethod
     def tailor_data_size(data, batch_size):
@@ -50,14 +54,15 @@ class DataIterator(object):
 
 
 class AVBDataIterator(DataIterator):
-    def __init__(self, data_dim, latent_dim, noise_dim, seed=7, noise_distribution='normal'):
+    def __init__(self, data_dim, latent_dim, noise_dim, seed=7, prior_distribution='standard_normal'):
         super(AVBDataIterator, self).__init__(seed=seed, data_dim=data_dim, latent_dim=latent_dim,
-                                              noise_dim=noise_dim, noise_distribution=noise_distribution)
+                                              noise_dim=noise_dim, prior_distribution=prior_distribution)
 
     def iter_data_training(self, data, n_batches, **kwargs):
         shuffle = kwargs.get('shuffle', True)
         data_size = data.shape[0]
         batch_size = data_size // n_batches
+        use_ac_update = kwargs.get('use_adaptive_contrast_update', False)
         while True:
             indices_new_order = np.arange(data_size)
             if shuffle:
@@ -65,8 +70,12 @@ class AVBDataIterator(DataIterator):
             batches_indices = np.split(indices_new_order, n_batches)
             # run for 1 epoch
             for batch_indices in batches_indices:
-                random_noise_data = self.noise_sampler(size=(batch_size, self.noise_dim))
-                random_noise_prior = self.noise_sampler(size=(batch_size, self.latent_dim))
+                random_noise_data = self.data_noise_sampler(size=(batch_size, self.noise_dim))
+                if use_ac_update:
+                    mean, var = yield
+                    random_noise_prior = self.prior_sampler((batch_size, self.noise_dim), mean, var)
+                else:
+                    random_noise_prior = self.prior_sampler(size=(batch_size, self.latent_dim))
                 yield [data[batch_indices], random_noise_data, random_noise_prior]
 
     def iter_data_inference(self, data, n_batches, **kwargs):
@@ -74,7 +83,7 @@ class AVBDataIterator(DataIterator):
         batch_size = data_size // n_batches
         while True:
             for batch_indices in np.split(np.arange(data_size), n_batches):
-                random_noise_data = self.noise_sampler(size=(batch_size, self.noise_dim))
+                random_noise_data = self.prior_sampler(size=(batch_size, self.noise_dim))
                 yield [data[batch_indices], random_noise_data]
 
     def iter_data_generation(self, data, n_batches, **kwargs):

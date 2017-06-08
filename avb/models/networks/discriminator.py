@@ -1,6 +1,6 @@
-from keras.layers import Dense, Dot, Activation, Concatenate
+from keras.layers import Activation
 from keras.models import Model, Input
-from architectures import synthetic_discriminator
+from architectures import get_network_by_name
 
 
 class Discriminator(object):
@@ -25,16 +25,18 @@ class Discriminator(object):
        Prior p(z): N(0,I) ------> |
        
     """
-    def __init__(self, data_dim, latent_dim):
+    def __init__(self, data_dim, latent_dim, network_architecture='synthetic'):
         """
         Args:
             data_dim: int, the flattened dimensionality of the data space
             latent_dim: int, the flattened dimensionality of the latent space
+            network_architecture: str, the architecture name for the body of the Discriminator model
         """
         discriminator_input_data = Input(shape=(data_dim,), name='disc_input_data')
         discriminator_input_latent = Input(shape=(latent_dim,), name='disc_input_latent')
 
-        discriminator_body = synthetic_discriminator([discriminator_input_data, discriminator_input_latent])
+        discriminator_body = get_network_by_name['discriminator'][network_architecture]([discriminator_input_data,
+                                                                                         discriminator_input_latent])
 
         discriminator_output = Activation(activation='sigmoid', name='disc_output')(discriminator_body)
 

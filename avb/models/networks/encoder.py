@@ -1,7 +1,7 @@
 import logging
 from keras.models import Model, Input
 
-from architectures import synthetic_encoder
+from architectures import get_network_by_name
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +23,13 @@ class Encoder(object):
         Latent space
     
     """
-    def __init__(self, data_dim, noise_dim, latent_dim):
+    def __init__(self, data_dim, noise_dim, latent_dim, network_architecture='synthetic'):
         """
         Args:
             data_dim: int, flattened data space dimensionality 
             noise_dim: int, flattened noise space dimensionality
             latent_dim: int, flattened latent space dimensionality
+            network_architecture: str, the architecture name for the body of the Encoder model
         """
         logger.info("Initialising Encoder model with {} dimensional data and {} dimensional noise input "
                     "and {} dimensional latent output".format(data_dim, noise_dim, latent_dim))
@@ -36,7 +37,7 @@ class Encoder(object):
         data_input = Input(shape=(data_dim,), name='enc_input_data')
         noise_input = Input(shape=(noise_dim,), name='enc_input_noise')
 
-        latent_factors = synthetic_encoder([data_input, noise_input], latent_dim)
+        latent_factors = get_network_by_name['encoder'][network_architecture]([data_input, noise_input], latent_dim)
 
         self.encoder_model = Model(inputs=[data_input, noise_input], outputs=latent_factors, name='encoder')
 
@@ -51,4 +52,8 @@ class Encoder(object):
         Returns:
             An Encoder model.
         """
-        return self.encoder_model(args[0])
+        estimate_moments = kwargs.get('estimate_moments', False)
+        if estimate_moments:
+            return None
+        else:
+            return self.encoder_model(args[0])
