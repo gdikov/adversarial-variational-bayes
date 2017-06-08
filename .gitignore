@@ -35,4 +35,4 @@ NOTES.txt
 output/
 
 # temporary disable third-party free software upload unless you make sure the LICENSE permits uploading it.
-third-party/
+third_party/

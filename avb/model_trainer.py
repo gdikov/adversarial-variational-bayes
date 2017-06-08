@@ -143,7 +143,8 @@ class AVBModelTrainer(ModelTrainer):
     """
     ModelTrainer instance for the AVBModel.
     """
-    def __init__(self, data_dim, latent_dim, noise_dim, experiment_name, schedule=None, overwrite=True):
+    def __init__(self, data_dim, latent_dim, noise_dim, experiment_name, schedule=None,
+                 resume_from=None, overwrite=True, use_adaptive_contrast=False):
         """
         Args:
             data_dim: int, flattened data dimensionality 
@@ -151,9 +152,14 @@ class AVBModelTrainer(ModelTrainer):
             noise_dim: int, flattened noise dimensionality
             experiment_name: str, name of the training/experiment for logging purposes
             schedule: dict, schedule of training discriminator and encoder-decoder networks
+            resume_from: str, model directory containing pre-trained model from which the training should be resumed
             overwrite: bool, whether to overwrite the existing trained model with the same experiment_name
+            use_adaptive_contrast: bool, whether to train according to the Adaptive Contrast algorithm
         """
-        avb = AdversarialVariationalBayes(data_dim=data_dim, latent_dim=latent_dim, noise_dim=noise_dim)
+        avb = AdversarialVariationalBayes(data_dim=data_dim, latent_dim=latent_dim, noise_dim=noise_dim,
+                                          resume_from=resume_from, deployable_models_only=False,
+                                          experiment_architecture=experiment_name,
+                                          use_adaptive_contrast=use_adaptive_contrast)
         self.schedule = schedule or {'iter_discr': 1, 'iter_encdec': 1}
         super(AVBModelTrainer, self).__init__(model=avb, experiment_name=experiment_name, overwrite=overwrite)
 
@@ -189,7 +195,8 @@ class VAEModelTrainer(ModelTrainer):
             experiment_name: str, name of the training/experiment for logging purposes
             overwrite: bool, whether to overwrite the existing trained model with the same experiment_name
         """
-        vae = GaussianVariationalAutoencoder(data_dim=data_dim, latent_dim=latent_dim)
+        vae = GaussianVariationalAutoencoder(data_dim=data_dim, latent_dim=latent_dim,
+                                             experiment_architecture=experiment_name)
         super(VAEModelTrainer, self).__init__(model=vae, experiment_name=experiment_name, overwrite=overwrite)
 
     def fit_model(self, data, batch_size, epochs, **kwargs):

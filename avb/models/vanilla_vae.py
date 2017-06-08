@@ -12,16 +12,19 @@ config = load_config('global_config.yaml')
 
 
 class GaussianVariationalAutoencoder(BaseVariationalAutoencoder):
-    def __init__(self, data_dim, latent_dim, resume_from=None, deployable_models_only=False):
+    def __init__(self, data_dim, latent_dim, resume_from=None, deployable_models_only=False,
+                 experiment_architecture='synthetic'):
         """
         Args:
             data_dim: int, flattened data dimensionality 
             latent_dim: int, flattened latent dimensionality
             resume_from: str, optional folder name with pre-trained models 
             deployable_models_only: bool, whether only the inference and generative models should be instantiated
+            experiment_architecture: str, network architecture descriptor
         """
-        self.encoder = ReparametrisedGaussianEncoder(data_dim=data_dim, noise_dim=latent_dim, latent_dim=latent_dim)
-        self.decoder = Decoder(data_dim=data_dim, latent_dim=latent_dim)
+        self.encoder = ReparametrisedGaussianEncoder(data_dim=data_dim, noise_dim=latent_dim, latent_dim=latent_dim,
+                                                     network_architecture=experiment_architecture)
+        self.decoder = Decoder(data_dim=data_dim, latent_dim=latent_dim, network_architecture=experiment_architecture)
         self.models_dict = {'deployable': {'inference_model': None, 'generative_model': None},
                             'trainable': {'vae_model': None}}
         # init the base class' inputs and deployable models and reuse them in the paer
@@ -39,7 +42,7 @@ class GaussianVariationalAutoencoder(BaseVariationalAutoencoder):
 
         self.models_dict['trainable']['vae_model'] = self.vae_model
         self.data_iterator = VAEDataIterator(data_dim=data_dim, latent_dim=latent_dim, noise_dim=latent_dim,
-                                             seed=config['general']['seed'], noise_distribution='normal')
+                                             seed=config['general']['seed'], prior_distribution='standard_normal')
 
     def fit(self, data, batch_size=32, epochs=1, **kwargs):
         """
