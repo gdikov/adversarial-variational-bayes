@@ -1,8 +1,9 @@
 import logging
+import keras.backend as ker
+
 from keras.models import Input
 from keras.layers import Lambda
 from keras.models import Model
-from keras.backend import exp
 
 from architectures import get_network_by_name
 
@@ -90,12 +91,14 @@ class MomentEstimationEncoder(object):
 
         data_input = Input(shape=(data_dim,), name='enc_input_data')
         noise_input = Input(shape=(noise_dim,), name='enc_input_noise')
+        sampling_input = Input(shape=(noise_dim,), name='enc_input_moment_estimator_sampling')
 
         latent_factors, mean, var = get_network_by_name['moment_estimation_encoder'][network_architecture](
-            [data_input, noise_input], latent_dim)
+            [data_input, noise_input, sampling_input], latent_dim)
 
         self.encoder_model = Model(inputs=[data_input, noise_input], outputs=latent_factors, name='encoder')
-        self.moment_estimation_model = Model(inputs=noise_input, outputs=[mean, var], name='encoder_moment_estimation')
+        self.moment_estimation_model = Model(inputs=[data_input, sampling_input], outputs=[mean, var],
+                                             name='encoder_moment_estimation')
 
     def __call__(self, *args, **kwargs):
         """
@@ -146,7 +149,7 @@ class ReparametrisedGaussianEncoder(object):
         latent_mean, latent_log_var = get_network_by_name['reparametrised_encoder'][network_architecture](data_input,
                                                                                                           latent_dim)
 
-        latent_factors = Lambda(lambda x: x[0] + exp(x[1] / 2.0) * x[2],
+        latent_factors = Lambda(lambda x: x[0] + ker.exp(x[1] / 2.0) * x[2],
                                 name='rep_enc_reparametrised_latent')([latent_mean, latent_log_var, noise_input])
 
         self.encoder_inference_model = Model(inputs=[data_input, noise_input], outputs=latent_factors,

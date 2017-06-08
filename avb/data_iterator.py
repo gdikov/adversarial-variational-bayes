@@ -61,8 +61,8 @@ class AVBDataIterator(DataIterator):
         shuffle = kwargs.get('shuffle', True)
         data_size = data.shape[0]
         batch_size = data_size // n_batches
-        use_ac_update = kwargs.get('use_adaptive_contrast_update', False)
-        ac_sampling_steps = kwargs.get('posterior_sampling_iters', 1)
+        use_ac_update = kwargs.get('use_adaptive_contrast', False)
+        ac_sampling_steps = kwargs.get('n_posterior_samples', 1)
         while True:
             indices_new_order = np.arange(data_size)
             if shuffle:
@@ -73,7 +73,7 @@ class AVBDataIterator(DataIterator):
                 noise_data = self.data_noise_sampler(size=(batch_size, self.noise_dim))
                 if use_ac_update:
                     mean, var = yield
-                    noise_prior = self.prior_sampler((batch_size, self.noise_dim), mean, var)
+                    noise_prior = self.prior_sampler((batch_size, self.latent_dim), mean, var)
                     moment_estimation_sampling = self.data_noise_sampler(size=(ac_sampling_steps, self.noise_dim))
                     yield [data[batch_indices], noise_data, noise_prior, moment_estimation_sampling]
                 else:
@@ -85,7 +85,7 @@ class AVBDataIterator(DataIterator):
         batch_size = data_size // n_batches
         while True:
             for batch_indices in np.split(np.arange(data_size), n_batches):
-                random_noise_data = self.prior_sampler(size=(batch_size, self.noise_dim))
+                random_noise_data = self.data_noise_sampler(size=(batch_size, self.noise_dim))
                 yield [data[batch_indices], random_noise_data]
 
     def iter_data_generation(self, data, n_batches, **kwargs):

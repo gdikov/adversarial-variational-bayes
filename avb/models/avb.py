@@ -39,6 +39,7 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
         self.noise_dim = noise_dim or data_dim
         self.latent_dim = latent_dim
 
+        self.use_adaptive_contrast = use_adaptive_contrast
         self.models_dict = {'deployable': {'inference_model': None, 'generative_model': None},
                             'trainable': {'avb_trainable_discriminator': None, 'avb_trainable_encoder_decoder': None}}
 
@@ -62,8 +63,8 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
             posterior_approximation = self.encoder([self.data_input, self.noise_input],
                                                    is_learning=True, estimate_moments=False)
             if use_adaptive_contrast:
-                self.posterior_moment_estimator = self.encoder(self.noise_input, is_learning=True,
-                                                               estimate_moments=True)
+                self.posterior_moment_estimator = self.encoder([self.data_input, self.noise_input],
+                                                               is_learning=True, estimate_moments=True)
             reconstruction_log_likelihood = self.decoder([self.data_input, posterior_approximation],
                                                          is_learning=True)
             discriminator_output_prior = self.discriminator([self.data_input, self.latent_prior_input])
@@ -117,15 +118,14 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
         """
         discriminator_repetitions = kwargs.get('discriminator_repetitions', 1)
         checkpoint_best = kwargs.get('checkpoint_best', False)
-        use_adaptive_contrast = kwargs.get('use_adaptive_contrast', False)
-        if use_adaptive_contrast:
-            sampling_iters = kwargs.get('posterior_moment_estimation_sampling_iters', 1)
+        if self.use_adaptive_contrast:
+            sampling_iters = kwargs.get('adaptive_contrast_sampling_steps', 1)
             data_iterator, iters_per_epoch = self.data_iterator.iter(data, batch_size, mode='training',
-                                                                     shuffle=True, use_adaptive_contrast_update=True,
-                                                                     posterior_sampling_iters=sampling_iters)
+                                                                     shuffle=True, use_adaptive_contrast=True,
+                                                                     n_posterior_samples=sampling_iters)
         else:
             data_iterator, iters_per_epoch = self.data_iterator.iter(data, batch_size, mode='training',
-                                                                     shuffle=True, use_adaptive_contrast_update=False)
+                                                                     shuffle=True, use_adaptive_contrast=False)
         history = {'encoderdecoder_loss': [], 'discriminator_loss': []}
         epoch_loss = np.inf
         mean, var = 0., 1.
@@ -133,10 +133,11 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
             epoch_loss_history_encdec = []
             epoch_loss_history_disc = []
             for it in xrange(iters_per_epoch):
-                if use_adaptive_contrast:
+                if self.use_adaptive_contrast:
                     data_iterator.next()
                     data_samples, data_noise, prior_noise, moment_estimation_noise = data_iterator.send((mean, var))
-                    mean, var = self.posterior_moment_estimator.predict_on_batch(moment_estimation_noise)
+                    mean, var = self.posterior_moment_estimator.predict_on_batch([data_samples,
+                                                                                  moment_estimation_noise])
                     training_batch = [data_samples, data_noise, prior_noise]
                 else:
                     training_batch = data_iterator.next()

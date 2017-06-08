@@ -19,7 +19,7 @@ if __name__ == '__main__':
     # trainer = VAEModelTrainer(data_dim=data_dim, latent_dim=2, experiment_name='mnist', overwrite=True)
     # trainer.run_training(train_data, batch_size=1024, epochs=2000)
 
-    trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=2, noise_dim=data_dim, experiment_name='mnist',
+    trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=2, noise_dim=data_dim/28, experiment_name='mnist',
                               overwrite=True, use_adaptive_contrast=True)
     model_dir = trainer.run_training(train_data, batch_size=10, epochs=5)
     trained_model = trainer.get_model()

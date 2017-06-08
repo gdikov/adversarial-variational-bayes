@@ -178,7 +178,8 @@ class AVBModelTrainer(ModelTrainer):
             A loss history dict with discriminator and encoder-decoder losses.
         """
         loss_hisotry = self.model.fit(data, batch_size, epochs=epochs,
-                                      discriminator_repetitions=self.schedule['iter_discr'])
+                                      discriminator_repetitions=self.schedule['iter_discr'],
+                                      adaptive_contrast_sampling_steps=10)
         return loss_hisotry
 
 

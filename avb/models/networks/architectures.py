@@ -1,6 +1,7 @@
 import keras.backend as ker
 
 from keras.layers import Dense, Conv2DTranspose, Conv2D, Concatenate, Dot, Reshape, LocallyConnected1D, Lambda
+from keras.models import Model, Input
 
 
 def repeat_dense(inputs, n_layers, n_units=256, activation='relu', name_prefix=None):
@@ -104,42 +105,47 @@ def mnist_encoder(inputs, latent_dim=8):
 
 
 def mnist_moment_estimation_encoder(inputs, latent_dim=8):
-    data_input, noise_input = inputs
+    data_input, noise_input, sampling_input = inputs
     data_dim = data_input.shape[1].value
     noise_dim = noise_input.shape[1].value
 
     assert data_dim == 28**2, "MNIST data should be flattened to a 784-dimensional vectors."
     # compute the noise basis vectors by attaching small independent fully connected networks to each noise scalar input
-    reshaped_noise = Reshape((-1, 1), name='enc_noise_reshape')(noise_input)
-    noise_basis_vectors = LocallyConnected1D(filters=16, kernel_size=1,
+    dummy_noise_input = Input(shape=(noise_dim,), name='enc_dummy_noise_internal_input')
+    reshaped_noise = Reshape((-1, 1), name='enc_noise_reshape')(dummy_noise_input)
+    noise_basis_vectors = LocallyConnected1D(filters=1, kernel_size=1, #16
                                              strides=1, activation='relu', name='enc_noise_f_0')(reshaped_noise)
-    noise_basis_vectors = LocallyConnected1D(filters=32, kernel_size=1,
+    noise_basis_vectors = LocallyConnected1D(filters=1, kernel_size=1, #32
                                              strides=1, activation='relu', name='enc_noise_f_1')(noise_basis_vectors)
     noise_basis_vectors = LocallyConnected1D(filters=latent_dim, kernel_size=1,
                                              strides=1, activation='relu', name='enc_noise_f_2')(noise_basis_vectors)
     assert noise_basis_vectors.get_shape().as_list() == [None, noise_dim, latent_dim]
+    noise_basis_vectors_model = Model(inputs=dummy_noise_input, outputs=noise_basis_vectors,
+                                      name='enc_noise_basis_vector_model')
+
+    latent_noise_basis_vectors = noise_basis_vectors_model(noise_input)
+    sampling_noise_basis_vector = noise_basis_vectors_model(sampling_input)
 
     # compute the data embedding using deep convolutional neural network and reshape the output to the noise dim.
     convnet_input = Reshape((28, 28, 1), name='enc_data_reshape')(data_input)
-    coefficients = deflating_convolution(convnet_input, n_deflation_layers=2,
+    coefficients = deflating_convolution(convnet_input, n_deflation_layers=1,
                                          n_filters_init=4, name_prefix='enc_data_body')
     coefficients = Reshape((-1,), name='enc_coefficients_reshape')(coefficients)
     coefficients = Dense(noise_dim, name='enc_coefficients')(coefficients)
 
+    latent_factors = Lambda(lambda x: ker.sum(x[0][:, :, None] * x[1], axis=1),
+                            name='enc_basis_vec_coeff_dot')([coefficients, latent_noise_basis_vectors])
+
     # compute empirical mean as the batchsize-wise mean of all noise vectors
-    empirical_mean_basis_vectors = ker.mean(noise_basis_vectors, axis=0)
-    # parametrise the posterior moment as described in the AVB paper
-    mean = Lambda(lambda x: ker.dot(x[0], x[1]), name='enc_moments_mean')([coefficients, empirical_mean_basis_vectors])
+    # and parametrise the posterior moment as described in the AVB paper
+    mean = Lambda(lambda x: ker.dot(x[0], ker.mean(x[1], axis=0)),
+                  name='enc_moments_mean')([coefficients, sampling_noise_basis_vector])
 
-    # do the same for the empirical variance
-    empirical_var_basis_vectors = ker.var(noise_basis_vectors, axis=0)
-    # similar posterior parametrization for the variance
-    var = Lambda(lambda x: ker.dot(x[0]**2, x[1]), name='enc_moments_var')([coefficients, empirical_var_basis_vectors])
+    # do the same for the empirical variance and compute similar posterior parametrization for the variance
+    var = Lambda(lambda x: ker.dot(x[0] ** 2, ker.var(x[1], axis=0)),
+                 name='enc_moments_var')([coefficients, sampling_noise_basis_vector])
 
-    linear_combination = Lambda(lambda x: ker.sum(x[0][:, :, None] * x[1], axis=1),
-                                name='enc_basis_vec_coeff_dot')([coefficients, noise_basis_vectors])
-
-    return linear_combination, mean, var
+    return latent_factors, mean, var
 
 
 def mnist_decoder(inputs):
