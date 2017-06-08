@@ -2,3 +2,4 @@ from decoder import Decoder
 from discriminator import Discriminator
 from encoder import Encoder
 from reparametrised_gaussian_encoder import ReparametrisedGaussianEncoder
+from moment_estimation_encoder import MomentEstimationEncoder

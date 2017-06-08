@@ -112,9 +112,14 @@ def mnist_encoder(inputs, latent_dim=8):
     coefficients = Reshape((-1,))(coefficients)
     coefficients = Dense(latent_dim)(coefficients)
 
-    empirical_mean = ker.mean(ker.sum(), axis=0)
+    empirical_mean_basis_vectors = ker.mean(noise_basis_vectors, axis=0)
+    mean = ker.sum(empirical_mean_basis_vectors * coefficients, axis=1)
+
+    empirical_var_basis_vectors = ker.var(noise_basis_vectors, axis=0)
+    var = ker.sum(empirical_var_basis_vectors * coefficients**2, axis=1)
+
     linear_combination = Dot(axes=-1)([noise_basis_vectors, coefficients])
-    return linear_combination
+    return linear_combination, mean, var
 
 
 def mnist_decoder(inputs):
@@ -135,9 +140,9 @@ def mnist_discriminator(inputs):
     return discriminator_body
 
 
-get_network_by_name = {'encoder': {'synthetic': synthetic_encoder,
-                                   'mnist': mnist_encoder},
+get_network_by_name = {'encoder': {'synthetic': synthetic_encoder},
                        'reparametrised_encoder': {'synthetic': synthetic_reparametrized_encoder},
+                       'moment_estimation_encoder': {'mnist': mnist_encoder},
                        'decoder': {'synthetic': synthetic_decoder,
                                    'mnist': mnist_decoder},
                        'discriminator': {'synthetic': synthetic_discriminator,

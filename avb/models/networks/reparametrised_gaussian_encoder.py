@@ -1,9 +1,9 @@
 import logging
-from keras.layers import Dense, Input, Lambda
+from keras.layers import Input, Lambda
 from keras.models import Model
 from keras.backend import exp
 
-from architectures import synthetic_reparametrized_encoder
+from architectures import get_network_by_name
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +22,13 @@ class ReparametrisedGaussianEncoder(object):
 
     """
 
-    def __init__(self, data_dim, noise_dim, latent_dim):
+    def __init__(self, data_dim, noise_dim, latent_dim, network_architecture='synthetic'):
         """
         Args:
             data_dim: int, flattened data space dimensionality 
             noise_dim: int, flattened noise space dimensionality
             latent_dim: int, flattened latent space dimensionality
+            network_architecture: str, the architecture name for the body of the reparametrised Gaussian Encoder model
         """
         logger.info("Initialising Reparametrised Gaussian Encoder model with {} dimensional data "
                     "and {} dimensional latent output".format(data_dim, noise_dim, latent_dim))
@@ -35,7 +36,8 @@ class ReparametrisedGaussianEncoder(object):
         data_input = Input(shape=(data_dim,), name='rep_enc_input_data')
         noise_input = Input(shape=(noise_dim,), name='rep_enc_input_noise')
 
-        latent_mean, latent_log_var = synthetic_reparametrized_encoder(data_input, latent_dim)
+        latent_mean, latent_log_var = get_network_by_name['reparametrised_encoder'][network_architecture](data_input,
+                                                                                                          latent_dim)
 
         latent_factors = Lambda(lambda x: x[0] + exp(x[1] / 2.0) * x[2],
                                 name='rep_enc_reparametrised_latent')([latent_mean, latent_log_var, noise_input])

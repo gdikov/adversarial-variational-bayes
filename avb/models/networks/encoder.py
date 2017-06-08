@@ -52,8 +52,4 @@ class Encoder(object):
         Returns:
             An Encoder model.
         """
-        estimate_moments = kwargs.get('estimate_moments', False)
-        if estimate_moments:
-            return None
-        else:
-            return self.encoder_model(args[0])
+        return self.encoder_model(args[0])

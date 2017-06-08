@@ -15,8 +15,7 @@ class DataIterator(object):
         if prior_distribution == 'standard_normal':
             self.prior_sampler = np.random.standard_normal
         elif prior_distribution == 'adaptive_normal':
-            self.prior_sampler = lambda n, mean, var: np.repeat(mean, noise_dim) \
-                                                      + np.sqrt(var) * np.random.standard_normal(n)
+            self.prior_sampler = lambda n, mean, var: mean + np.sqrt(var) * np.random.standard_normal(n)
         elif prior_distribution == 'uniform':
             self.prior_sampler = np.random.uniform
         else:
@@ -63,6 +62,7 @@ class AVBDataIterator(DataIterator):
         data_size = data.shape[0]
         batch_size = data_size // n_batches
         use_ac_update = kwargs.get('use_adaptive_contrast_update', False)
+        ac_sampling_steps = kwargs.get('posterior_sampling_iters', 1)
         while True:
             indices_new_order = np.arange(data_size)
             if shuffle:
@@ -70,13 +70,15 @@ class AVBDataIterator(DataIterator):
             batches_indices = np.split(indices_new_order, n_batches)
             # run for 1 epoch
             for batch_indices in batches_indices:
-                random_noise_data = self.data_noise_sampler(size=(batch_size, self.noise_dim))
+                noise_data = self.data_noise_sampler(size=(batch_size, self.noise_dim))
                 if use_ac_update:
                     mean, var = yield
-                    random_noise_prior = self.prior_sampler((batch_size, self.noise_dim), mean, var)
+                    noise_prior = self.prior_sampler((batch_size, self.noise_dim), mean, var)
+                    moment_estimation_sampling = self.data_noise_sampler(size=(ac_sampling_steps, self.noise_dim))
+                    yield [data[batch_indices], noise_data, noise_prior, moment_estimation_sampling]
                 else:
-                    random_noise_prior = self.prior_sampler(size=(batch_size, self.latent_dim))
-                yield [data[batch_indices], random_noise_data, random_noise_prior]
+                    noise_prior = self.prior_sampler(size=(batch_size, self.latent_dim))
+                    yield [data[batch_indices], noise_data, noise_prior]
 
     def iter_data_inference(self, data, n_batches, **kwargs):
         data_size = data.shape[0]
