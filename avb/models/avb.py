@@ -3,6 +3,7 @@ import os
 from tqdm import tqdm
 
 from keras.optimizers import RMSprop
+from keras.models import Input
 from ..models.freezable import FreezableModel
 from ..models.base_vae import BaseVariationalAutoencoder
 
@@ -46,7 +47,7 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
         if use_adaptive_contrast:
             self.encoder = MomentEstimationEncoder(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
                                                    network_architecture=experiment_architecture)
-            self.models_dict['trainable']['posterior_moment_estimator'] = None
+            self.models_dict['trainable']['noise_moment_estimator'] = None
         else:
             self.encoder = Encoder(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
                                    network_architecture=experiment_architecture)
@@ -60,11 +61,21 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
                                                           resume_from=resume_from,
                                                           deployable_models_only=deployable_models_only)
         if resume_from is None:
-            posterior_approximation = self.encoder([self.data_input, self.noise_input],
-                                                   is_learning=True, estimate_moments=False)
             if use_adaptive_contrast:
-                self.posterior_moment_estimator = self.encoder([self.data_input, self.noise_input],
-                                                               is_learning=True, estimate_moments=True)
+                noise_basis_mean_input = Input(shape=(noise_dim,), name='avb_noise_basis_mean_input')
+                noise_basis_var_input = Input(shape=(noise_dim,), name='avb_noise_basis_var_input')
+                posterior_approximation, posterior_mean, posterior_var = self.encoder([self.data_input,
+                                                                                       self.noise_input,
+                                                                                       noise_basis_mean_input,
+                                                                                       noise_basis_var_input],
+                                                                                      is_learning=True,
+                                                                                      estimate_noise_moments=False)
+                sampling_input = Input(shape=(noise_dim,), name='avb_input_moment_estimator_sampling_input')
+                self.noise_moment_estimator = self.encoder(sampling_input, is_learning=True,
+                                                           estimate_noise_moments=True)
+            else:
+                posterior_approximation = self.encoder([self.data_input, self.noise_input],
+                                                       is_learning=True, estimate_noise_moments=False)
             reconstruction_log_likelihood = self.decoder([self.data_input, posterior_approximation],
                                                          is_learning=True)
             discriminator_output_prior = self.discriminator([self.data_input, self.latent_prior_input])
@@ -79,8 +90,14 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
             self.avb_trainable_discriminator = FreezableModel(inputs=[self.data_input, self.noise_input,
                                                                       self.latent_prior_input],
                                                               outputs=discriminator_loss, name_prefix=['disc'])
-            self.avb_trainable_encoder_decoder = FreezableModel(inputs=[self.data_input, self.noise_input],
-                                                                outputs=decoder_loss, name_prefix=['dec', 'enc'])
+            if use_adaptive_contrast:
+                self.avb_trainable_encoder_decoder = FreezableModel(inputs=[self.data_input, self.noise_input,
+                                                                            noise_basis_mean_input,
+                                                                            noise_basis_var_input],
+                                                                    outputs=decoder_loss, name_prefix=['dec', 'enc'])
+            else:
+                self.avb_trainable_encoder_decoder = FreezableModel(inputs=[self.data_input, self.noise_input],
+                                                                    outputs=decoder_loss, name_prefix=['dec', 'enc'])
 
             self.avb_trainable_discriminator.freeze()
             self.avb_trainable_encoder_decoder.unfreeze()
@@ -135,17 +152,24 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
             for it in xrange(iters_per_epoch):
                 if self.use_adaptive_contrast:
                     data_iterator.next()
-                    data_samples, data_noise, prior_noise, moment_estimation_noise = data_iterator.send((mean, var))
-                    mean, var = self.posterior_moment_estimator.predict_on_batch([data_samples,
-                                                                                  moment_estimation_noise])
-                    training_batch = [data_samples, data_noise, prior_noise]
+                    data_samples, data_noise, prior_noise, sampling_noise = data_iterator.send((mean, var))
+
+                    noise_basis_mean, noise_basis_var = self.noise_moment_estimator.predict_on_batch(sampling_noise)
+                    training_batch_enc = [data_samples, data_noise, noise_basis_mean, noise_basis_var]
+                    training_batch_disc = [data_samples, data_noise, prior_noise]
+
+                    loss_autoencoder = self.avb_trainable_encoder_decoder.train_on_batch(training_batch_enc, None)
+                    epoch_loss_history_encdec.append(loss_autoencoder)
+                    for _ in xrange(discriminator_repetitions):
+                        loss_discriminator = self.avb_trainable_discriminator.train_on_batch(training_batch_disc, None)
+                        epoch_loss_history_disc.append(loss_discriminator)
                 else:
                     training_batch = data_iterator.next()
-                loss_autoencoder = self.avb_trainable_encoder_decoder.train_on_batch(training_batch[:-1], None)
-                epoch_loss_history_encdec.append(loss_autoencoder)
-                for _ in xrange(discriminator_repetitions):
-                    loss_discriminator = self.avb_trainable_discriminator.train_on_batch(training_batch, None)
-                    epoch_loss_history_disc.append(loss_discriminator)
+                    loss_autoencoder = self.avb_trainable_encoder_decoder.train_on_batch(training_batch[:-1], None)
+                    epoch_loss_history_encdec.append(loss_autoencoder)
+                    for _ in xrange(discriminator_repetitions):
+                        loss_discriminator = self.avb_trainable_discriminator.train_on_batch(training_batch, None)
+                        epoch_loss_history_disc.append(loss_discriminator)
 
             if checkpoint_best:
                 current_epoch_loss = np.mean(epoch_loss_history_encdec) + np.mean(epoch_loss_history_disc)

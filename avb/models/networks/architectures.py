@@ -104,28 +104,42 @@ def mnist_encoder(inputs, latent_dim=8):
     return latent_factors
 
 
-def mnist_moment_estimation_encoder(inputs, latent_dim=8):
-    data_input, noise_input, sampling_input = inputs
-    data_dim = data_input.shape[1].value
-    noise_dim = noise_input.shape[1].value
-
-    assert data_dim == 28**2, "MNIST data should be flattened to a 784-dimensional vectors."
+def _build_noise_basis_vectors_model(noise_dim, latent_dim):
     # compute the noise basis vectors by attaching small independent fully connected networks to each noise scalar input
     dummy_noise_input = Input(shape=(noise_dim,), name='enc_dummy_noise_internal_input')
     reshaped_noise = Reshape((-1, 1), name='enc_noise_reshape')(dummy_noise_input)
-    noise_basis_vectors = LocallyConnected1D(filters=1, kernel_size=1, #16
+    noise_basis_vectors = LocallyConnected1D(filters=1, kernel_size=1,  # 16
                                              strides=1, activation='relu', name='enc_noise_f_0')(reshaped_noise)
-    noise_basis_vectors = LocallyConnected1D(filters=1, kernel_size=1, #32
+    noise_basis_vectors = LocallyConnected1D(filters=1, kernel_size=1,  # 32
                                              strides=1, activation='relu', name='enc_noise_f_1')(noise_basis_vectors)
     noise_basis_vectors = LocallyConnected1D(filters=latent_dim, kernel_size=1,
                                              strides=1, activation='relu', name='enc_noise_f_2')(noise_basis_vectors)
     assert noise_basis_vectors.get_shape().as_list() == [None, noise_dim, latent_dim]
     noise_basis_vectors_model = Model(inputs=dummy_noise_input, outputs=noise_basis_vectors,
                                       name='enc_noise_basis_vector_model')
+    return noise_basis_vectors_model
 
-    latent_noise_basis_vectors = noise_basis_vectors_model(noise_input)
-    sampling_noise_basis_vector = noise_basis_vectors_model(sampling_input)
 
+def _build_noise_basis_vectors_moments_estimation_model(noise_dim, noise_basis_vectors_model):
+    noise_input = Input(shape=(noise_dim,), name='enc_noise_basis_vectors_mean_input')
+    noise_basis_vectors = noise_basis_vectors_model(noise_input)
+    # compute empirical mean as the batchsize-wise mean of all noise vectors
+    mean = Lambda(lambda x: ker.mean(x, axis=0), name='enc_noise_basis_vectors_mean')(noise_basis_vectors)
+
+    # do the same for the empirical variance and compute similar posterior parametrization for the variance
+    var = Lambda(lambda x: ker.var(x, axis=0), name='enc_noise_basis_vectors_var')(noise_basis_vectors)
+    moments_estimation_model = Model(inputs=noise_input, outputs=[mean, var],
+                                     name='enc_noise_basis_vectors_moments_model')
+    return moments_estimation_model
+
+
+def _build_posterior_moments_estimation_model(data_dim, noise_dim, latent_dim, noise_basis_vectors_model):
+    noise_basis_vectors_mean_input = Input(shape=(noise_dim, latent_dim), name='enc_nbv_mean_input')
+    noise_basis_vectors_var_input = Input(shape=(noise_dim, latent_dim), name='enc_nbv_var_input')
+    data_input = Input(shape=(data_dim,), name='enc_internal_data_input')
+    noise_input = Input(shape=(noise_dim,), name='enc_internal_noise_input')
+
+    noise_basis_vectors = noise_basis_vectors_model(noise_input)
     # compute the data embedding using deep convolutional neural network and reshape the output to the noise dim.
     convnet_input = Reshape((28, 28, 1), name='enc_data_reshape')(data_input)
     coefficients = deflating_convolution(convnet_input, n_deflation_layers=1,
@@ -134,18 +148,35 @@ def mnist_moment_estimation_encoder(inputs, latent_dim=8):
     coefficients = Dense(noise_dim, name='enc_coefficients')(coefficients)
 
     latent_factors = Lambda(lambda x: ker.sum(x[0][:, :, None] * x[1], axis=1),
-                            name='enc_basis_vec_coeff_dot')([coefficients, latent_noise_basis_vectors])
+                            name='enc_basis_vec_coeff_dot')([coefficients, noise_basis_vectors])
 
-    # compute empirical mean as the batchsize-wise mean of all noise vectors
     # and parametrise the posterior moment as described in the AVB paper
-    mean = Lambda(lambda x: ker.dot(x[0], ker.mean(x[1], axis=0)),
-                  name='enc_moments_mean')([coefficients, sampling_noise_basis_vector])
+    mean = Lambda(lambda x: ker.dot(x[0], x[1]),
+                  name='enc_moments_mean')([coefficients, noise_basis_vectors_mean_input])
 
-    # do the same for the empirical variance and compute similar posterior parametrization for the variance
-    var = Lambda(lambda x: ker.dot(x[0] ** 2, ker.var(x[1], axis=0)),
-                 name='enc_moments_var')([coefficients, sampling_noise_basis_vector])
+    # compute similar posterior parametrization for the variance
+    var = Lambda(lambda x: ker.dot(x[0] ** 2, x[1]),
+                 name='enc_moments_var')([coefficients, noise_basis_vectors_var_input])
+    latent_and_moments_model = Model(inputs=[data_input, noise_input,
+                                             noise_basis_vectors_mean_input,
+                                             noise_basis_vectors_var_input],
+                                     outputs=[latent_factors, mean, var], name='enc_latent_and_moments_model')
+    latent_only_model = Model(inputs=[data_input, noise_input], outputs=latent_factors,
+                              name='enc_deployable_model')
+    return latent_and_moments_model, latent_only_model
 
-    return latent_factors, mean, var
+
+def mnist_moment_estimation_encoder(data_dim, noise_dim, latent_dim=8):
+    assert data_dim == 28**2, "MNIST data should be flattened to a 784-dimensional vectors."
+
+    noise_basis_vectors_model = _build_noise_basis_vectors_model(noise_dim, latent_dim)
+    noise_basis_vectors_moments_model = _build_noise_basis_vectors_moments_estimation_model(noise_dim,
+                                                                                            noise_basis_vectors_model)
+
+    latent_and_moments_model, latent_model = _build_posterior_moments_estimation_model(data_dim, noise_dim, latent_dim,
+                                                                                       noise_basis_vectors_model)
+
+    return latent_model, latent_and_moments_model, noise_basis_vectors_moments_model
 
 
 def mnist_decoder(inputs):

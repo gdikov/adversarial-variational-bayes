@@ -91,14 +91,27 @@ class MomentEstimationEncoder(object):
 
         data_input = Input(shape=(data_dim,), name='enc_input_data')
         noise_input = Input(shape=(noise_dim,), name='enc_input_noise')
-        sampling_input = Input(shape=(noise_dim,), name='enc_input_moment_estimator_sampling')
+        sampling_input = Input(shape=(noise_dim,), name='enc_input_moment_estimator_sampling_input')
+        noise_basis_mean_input = Input(shape=(noise_dim,), name='enc_noise_basis_mean_input')
+        noise_basis_var_input = Input(shape=(noise_dim,), name='enc_noise_basis_var_input')
 
-        latent_factors, mean, var = get_network_by_name['moment_estimation_encoder'][network_architecture](
-            [data_input, noise_input, sampling_input], latent_dim)
+        models = get_network_by_name['moment_estimation_encoder'][network_architecture](data_dim, noise_dim, latent_dim)
 
-        self.encoder_model = Model(inputs=[data_input, noise_input], outputs=latent_factors, name='encoder')
-        self.moment_estimation_model = Model(inputs=[data_input, sampling_input], outputs=[mean, var],
-                                             name='encoder_moment_estimation')
+        latent_model, latent_and_moments_model, noise_basis_vectors_moments_model = models
+        latent_factors = latent_model([data_input, noise_input])
+        self.encoder_inference_model = Model(inputs=[data_input, noise_input], outputs=latent_factors,
+                                             name='encoder_inference_model')
+        noise_basis_mean, noise_basis_var = noise_basis_vectors_moments_model(sampling_input)
+        self.encoder_noise_moment_estimation_model = Model(inputs=sampling_input, outputs=[noise_basis_mean,
+                                                                                           noise_basis_var],
+                                                           name='encoder_noise_moments_model')
+        latent_factors, posterior_mean, posterior_var = latent_and_moments_model([data_input, noise_input,
+                                                                                  noise_basis_mean_input,
+                                                                                  noise_basis_var_input])
+        self.encoder_trainable_model = Model(inputs=[data_input, noise_input,
+                                                     noise_basis_mean_input, noise_basis_var_input],
+                                             outputs=[latent_factors, posterior_mean, posterior_var],
+                                             name='encoder_trainable_model')
 
     def __call__(self, *args, **kwargs):
         """
@@ -111,11 +124,14 @@ class MomentEstimationEncoder(object):
         Returns:
             An Encoder model.
         """
-        estimate_moments = kwargs.get('estimate_moments', False)
-        if estimate_moments:
-            return self.moment_estimation_model(args[0])
+        is_learning = kwargs.get('is_learning', True)
+        estimate_noise_moments = kwargs.get('estimate_noise_moments', True)
+        if is_learning:
+            if estimate_noise_moments:
+                return self.encoder_noise_moment_estimation_model(args[0])
+            return self.encoder_trainable_model(args[0])
         else:
-            return self.encoder_model(args[0])
+            return self.encoder_inference_model(args[0])
 
 
 class ReparametrisedGaussianEncoder(object):
