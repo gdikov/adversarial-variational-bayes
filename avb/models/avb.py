@@ -3,7 +3,6 @@ import os
 from tqdm import tqdm
 
 from keras.optimizers import RMSprop
-from keras.models import Input
 from ..models.freezable import FreezableModel
 from ..models.base_vae import BaseVariationalAutoencoder
 
@@ -47,7 +46,6 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
         if use_adaptive_contrast:
             self.encoder = MomentEstimationEncoder(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
                                                    network_architecture=experiment_architecture)
-            self.models_dict['trainable']['noise_moment_estimator'] = None
         else:
             self.encoder = Encoder(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
                                    network_architecture=experiment_architecture)
@@ -62,22 +60,10 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
                                                           deployable_models_only=deployable_models_only)
         if resume_from is None:
             if use_adaptive_contrast:
-                noise_basis_mean_input = Input(shape=(noise_dim,), name='avb_noise_basis_mean_input')
-                noise_basis_var_input = Input(shape=(noise_dim,), name='avb_noise_basis_var_input')
-                posterior_approximation, posterior_mean, posterior_var = self.encoder([self.data_input,
-                                                                                       self.noise_input,
-                                                                                       noise_basis_mean_input,
-                                                                                       noise_basis_var_input],
-                                                                                      is_learning=True,
-                                                                                      estimate_noise_moments=False)
-                sampling_input = Input(shape=(noise_dim,), name='avb_input_moment_estimator_sampling_input')
-                self.noise_moment_estimator = self.encoder(sampling_input, is_learning=True,
-                                                           estimate_noise_moments=True)
+                posterior_approximation, posterior_mean, posterior_var = self.encoder(self.data_input, is_learning=True)
             else:
-                posterior_approximation = self.encoder([self.data_input, self.noise_input],
-                                                       is_learning=True, estimate_noise_moments=False)
-            reconstruction_log_likelihood = self.decoder([self.data_input, posterior_approximation],
-                                                         is_learning=True)
+                posterior_approximation = self.encoder(self.data_input, is_learning=True)
+            reconstruction_log_likelihood = self.decoder([self.data_input, posterior_approximation], is_learning=True)
             discriminator_output_prior = self.discriminator([self.data_input, self.latent_prior_input])
             discriminator_output_posterior = self.discriminator([self.data_input, posterior_approximation])
 

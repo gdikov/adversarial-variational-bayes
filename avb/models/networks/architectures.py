@@ -1,6 +1,4 @@
-import keras.backend as ker
-
-from keras.layers import Dense, Conv2DTranspose, Conv2D, Concatenate, Dot, Reshape, LocallyConnected1D, Lambda
+from keras.layers import Activation, Dense, Conv2DTranspose, Conv2D, Dot, Reshape, LocallyConnected1D
 from keras.models import Model, Input
 
 
@@ -60,9 +58,7 @@ def deflating_convolution(inputs, n_deflation_layers, n_filters_init=32, name_pr
 
 
 def synthetic_encoder(inputs, latent_dim):
-    data_input, noise_input = inputs
-    encoder_input = Concatenate(axis=1, name='enc_data_noise_concat')([data_input, noise_input])
-    encoder_body = repeat_dense(encoder_input, n_layers=2, n_units=256, name_prefix='enc_body')
+    encoder_body = repeat_dense(inputs, n_layers=2, n_units=256, name_prefix='enc_body')
     latent_factors = Dense(latent_dim, activation=None, name='enc_latent')(encoder_body)
     return latent_factors
 
@@ -85,29 +81,23 @@ def synthetic_discriminator(inputs):
     discriminator_body_data = repeat_dense(data_input, n_layers=2, n_units=256, name_prefix='disc_body_data')
     discriminator_body_latent = repeat_dense(latent_input, n_layers=2, n_units=256, name_prefix='disc_body_latent')
     merged_data_latent = Dot(axes=1, name='disc_merge')([discriminator_body_data, discriminator_body_latent])
-    return merged_data_latent
+    discriminator_output = Activation(activation='sigmoid', name='disc_output')(merged_data_latent)
+    return discriminator_output
 
 
 """ Architectures for reproducing paper experiments on the MNIST dataset. """
 
 
 def mnist_encoder(inputs, latent_dim=8):
-    data_input, noise_input = inputs
-    data_dim = data_input.shape[1]
-    assert data_dim == 28 ** 2, "MNIST data should be flattened to a 784-dimensional vectors."
-
-    convnet_input = Reshape((28, 28, 1), name='enc_reshape_data')(data_input)
-    latent_factors = deflating_convolution(convnet_input, n_deflation_layers=3, name_prefix='enc_body')
-    latent_factors = Reshape((-1,), name='enc_reshape_latent')(latent_factors)
-    latent_factors = Dense(latent_dim, name='enc_latent')(latent_factors)
-
+    encoder_body = repeat_dense(inputs, n_layers=4, n_units=512, name_prefix='enc_body')
+    latent_factors = Dense(latent_dim, activation=None, name='enc_latent')(encoder_body)
     return latent_factors
 
 
-def _build_noise_basis_vectors_model(noise_dim, latent_dim):
+def mnist_moment_estimation_encoder(data_dim, noise_dim, latent_dim=8):
+    noise_input = Input(shape=(noise_dim,), name='enc_internal_noise_input')
     # compute the noise basis vectors by attaching small independent fully connected networks to each noise scalar input
-    dummy_noise_input = Input(shape=(noise_dim,), name='enc_dummy_noise_internal_input')
-    reshaped_noise = Reshape((-1, 1), name='enc_noise_reshape')(dummy_noise_input)
+    reshaped_noise = Reshape((-1, 1), name='enc_noise_reshape')(noise_input)
     noise_basis_vectors = LocallyConnected1D(filters=1, kernel_size=1,  # 16
                                              strides=1, activation='relu', name='enc_noise_f_0')(reshaped_noise)
     noise_basis_vectors = LocallyConnected1D(filters=1, kernel_size=1,  # 32
@@ -115,68 +105,21 @@ def _build_noise_basis_vectors_model(noise_dim, latent_dim):
     noise_basis_vectors = LocallyConnected1D(filters=latent_dim, kernel_size=1,
                                              strides=1, activation='relu', name='enc_noise_f_2')(noise_basis_vectors)
     assert noise_basis_vectors.get_shape().as_list() == [None, noise_dim, latent_dim]
-    noise_basis_vectors_model = Model(inputs=dummy_noise_input, outputs=noise_basis_vectors,
+    noise_basis_vectors_model = Model(inputs=noise_input, outputs=noise_basis_vectors,
                                       name='enc_noise_basis_vector_model')
-    return noise_basis_vectors_model
 
-
-def _build_noise_basis_vectors_moments_estimation_model(noise_dim, noise_basis_vectors_model):
-    noise_input = Input(shape=(noise_dim,), name='enc_noise_basis_vectors_mean_input')
-    noise_basis_vectors = noise_basis_vectors_model(noise_input)
-    # compute empirical mean as the batchsize-wise mean of all noise vectors
-    mean = Lambda(lambda x: ker.mean(x, axis=0), name='enc_noise_basis_vectors_mean')(noise_basis_vectors)
-
-    # do the same for the empirical variance and compute similar posterior parametrization for the variance
-    var = Lambda(lambda x: ker.var(x, axis=0), name='enc_noise_basis_vectors_var')(noise_basis_vectors)
-    moments_estimation_model = Model(inputs=noise_input, outputs=[mean, var],
-                                     name='enc_noise_basis_vectors_moments_model')
-    return moments_estimation_model
-
-
-def _build_posterior_moments_estimation_model(data_dim, noise_dim, latent_dim, noise_basis_vectors_model):
-    noise_basis_vectors_mean_input = Input(shape=(noise_dim, latent_dim), name='enc_nbv_mean_input')
-    noise_basis_vectors_var_input = Input(shape=(noise_dim, latent_dim), name='enc_nbv_var_input')
     data_input = Input(shape=(data_dim,), name='enc_internal_data_input')
-    noise_input = Input(shape=(noise_dim,), name='enc_internal_noise_input')
-
-    noise_basis_vectors = noise_basis_vectors_model(noise_input)
+    assert data_dim == 28 ** 2, "MNIST data should be flattened to a 784-dimensional vectors."
     # compute the data embedding using deep convolutional neural network and reshape the output to the noise dim.
     convnet_input = Reshape((28, 28, 1), name='enc_data_reshape')(data_input)
     coefficients = deflating_convolution(convnet_input, n_deflation_layers=1,
                                          n_filters_init=4, name_prefix='enc_data_body')
     coefficients = Reshape((-1,), name='enc_coefficients_reshape')(coefficients)
     coefficients = Dense(noise_dim, name='enc_coefficients')(coefficients)
+    assert coefficients.get_shape().as_list() == [None, noise_dim, latent_dim]
+    coefficients_model = Model(inputs=data_input, outputs=coefficients, name='enc_noise_basis_vector_model')
 
-    latent_factors = Lambda(lambda x: ker.sum(x[0][:, :, None] * x[1], axis=1),
-                            name='enc_basis_vec_coeff_dot')([coefficients, noise_basis_vectors])
-
-    # and parametrise the posterior moment as described in the AVB paper
-    mean = Lambda(lambda x: ker.dot(x[0], x[1]),
-                  name='enc_moments_mean')([coefficients, noise_basis_vectors_mean_input])
-
-    # compute similar posterior parametrization for the variance
-    var = Lambda(lambda x: ker.dot(x[0] ** 2, x[1]),
-                 name='enc_moments_var')([coefficients, noise_basis_vectors_var_input])
-    latent_and_moments_model = Model(inputs=[data_input, noise_input,
-                                             noise_basis_vectors_mean_input,
-                                             noise_basis_vectors_var_input],
-                                     outputs=[latent_factors, mean, var], name='enc_latent_and_moments_model')
-    latent_only_model = Model(inputs=[data_input, noise_input], outputs=latent_factors,
-                              name='enc_deployable_model')
-    return latent_and_moments_model, latent_only_model
-
-
-def mnist_moment_estimation_encoder(data_dim, noise_dim, latent_dim=8):
-    assert data_dim == 28**2, "MNIST data should be flattened to a 784-dimensional vectors."
-
-    noise_basis_vectors_model = _build_noise_basis_vectors_model(noise_dim, latent_dim)
-    noise_basis_vectors_moments_model = _build_noise_basis_vectors_moments_estimation_model(noise_dim,
-                                                                                            noise_basis_vectors_model)
-
-    latent_and_moments_model, latent_model = _build_posterior_moments_estimation_model(data_dim, noise_dim, latent_dim,
-                                                                                       noise_basis_vectors_model)
-
-    return latent_model, latent_and_moments_model, noise_basis_vectors_moments_model
+    return coefficients_model, noise_basis_vectors_model
 
 
 def mnist_decoder(inputs):
@@ -195,7 +138,8 @@ def mnist_discriminator(inputs):
     discriminator_body_data = repeat_dense(data_input, n_layers=2, n_units=256, name_prefix='disc_body_data')
     discriminator_body_latent = repeat_dense(latent_input, n_layers=2, n_units=256, name_prefix='disc_body_latent')
     merged_data_latent = Dot(axes=1, name='disc_merge')([discriminator_body_data, discriminator_body_latent])
-    return merged_data_latent
+    discriminator_output = Activation(activation='sigmoid', name='disc_output')(merged_data_latent)
+    return discriminator_output
 
 
 get_network_by_name = {'encoder': {'synthetic': synthetic_encoder,

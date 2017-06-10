@@ -2,29 +2,62 @@ import logging
 import keras.backend as ker
 
 from keras.models import Input
-from keras.layers import Lambda
+from keras.layers import Lambda, Concatenate, Multiply, Add
 from keras.models import Model
 
 from architectures import get_network_by_name
+from utils.config import load_config
 
+config = load_config('global_config.yaml')
 logger = logging.getLogger(__name__)
 
 
-class Encoder(object):
+class BaseEncoder(object):
+    def __init__(self, data_dim, noise_dim, latent_dim, network_architecture='synthetic', name='encoder'):
+        logger.info("Initialising {} model with {}-dimensional data and {}-dimensional noise input "
+                    "and {} dimensional latent output".format(name, data_dim, noise_dim, latent_dim))
+        self.name = name
+        self.data_dim = data_dim
+        self.noise_dim = noise_dim
+        self.latent_dim = latent_dim
+        self.network_architecture = network_architecture
+        self.data_input = Input(shape=(data_dim,), name='enc_data_input')
+        self.noise_sampler = Lambda(self.sample_noise, name='enc_noise_sampler')
+
+    def sample_noise(self, inputs, **kwargs):
+        mu = kwargs.get('mean', 0.)
+        sigma2 = kwargs.get('variance', 1.)
+        n_samples = kwargs.get('n_samples', ker.shape(self.data_input)[0])
+        samples_isotropic = ker.random_normal(shape=(n_samples, self.noise_dim),
+                                              mean=0, stddev=1, seed=config['general']['seed'])
+        samples = mu + ker.sqrt(sigma2) * samples_isotropic
+        op_mode = kwargs.get('mode', 'none')
+        if op_mode == 'concatenate':
+            concat = Concatenate(axis=1, name='enc_noise_concatenation')([inputs, samples])
+            return concat
+        return samples
+
+    def __call__(self, *args, **kwargs):
+        return None
+
+
+class Encoder(BaseEncoder):
     """
     An Encoder model is trained to parametrise an arbitrary posterior approximate distribution given some 
     input x, i.e. q(z|x). The model takes as input concatenated data samples and arbitrary noise and produces
     a latent encoding:
     
-      Data     Noise
-       |         |
-       ----------- <-- concatenation
-            | 
+      Data                              Input
+     - - - - - - - - -   
+       |       Noise                      
+       |         |                        
+       ----------- <-- concatenation    
+            |                           Encoder model
        -----------
-       | Encoder |
+       | Encoder |                      
        -----------
             |
-        Latent space
+        Latent space                    Output
     
     """
     def __init__(self, data_dim, noise_dim, latent_dim, network_architecture='synthetic'):
@@ -35,15 +68,13 @@ class Encoder(object):
             latent_dim: int, flattened latent space dimensionality
             network_architecture: str, the architecture name for the body of the Encoder model
         """
-        logger.info("Initialising Encoder model with {} dimensional data and {} dimensional noise input "
-                    "and {} dimensional latent output".format(data_dim, noise_dim, latent_dim))
+        super(Encoder, self).__init__(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
+                                      network_architecture=network_architecture, name='Standard Encoder')
 
-        data_input = Input(shape=(data_dim,), name='enc_input_data')
-        noise_input = Input(shape=(noise_dim,), name='enc_input_noise')
-
-        latent_factors = get_network_by_name['encoder'][network_architecture]([data_input, noise_input], latent_dim)
-
-        self.encoder_model = Model(inputs=[data_input, noise_input], outputs=latent_factors, name='encoder')
+        self.noise_sampler.arguments = {'mean': 0., 'variance': 1., 'mode': 'concatenate'}
+        data_noise_concat = self.noise_sampler(self.data_input)
+        latent_factors = get_network_by_name['encoder'][network_architecture](data_noise_concat, latent_dim)
+        self.encoder_model = Model(inputs=self.data_input, outputs=latent_factors, name='encoder')
 
     def __call__(self, *args, **kwargs):
         """
@@ -59,7 +90,7 @@ class Encoder(object):
         return self.encoder_model(args[0])
 
 
-class MomentEstimationEncoder(object):
+class MomentEstimationEncoder(BaseEncoder):
     """
     An Encoder model is trained to parametrise an arbitrary posterior approximate distribution given some 
     input x, i.e. q(z|x). The model takes as input concatenated data samples and arbitrary noise and produces
@@ -86,30 +117,41 @@ class MomentEstimationEncoder(object):
             latent_dim: int, flattened latent space dimensionality
             network_architecture: str, the architecture name for the body of the moment estimation Encoder model
         """
-        logger.info("Initialising moment estimation Encoder model with {} dimensional data and {} dimensional "
-                    "noise input and {} dimensional latent output".format(data_dim, noise_dim, latent_dim))
-
-        data_input = Input(shape=(data_dim,), name='enc_input_data')
-        noise_input = Input(shape=(noise_dim,), name='enc_input_noise')
-        sampling_input = Input(shape=(noise_dim,), name='enc_input_moment_estimator_sampling_input')
-        noise_basis_mean_input = Input(shape=(noise_dim,), name='enc_noise_basis_mean_input')
-        noise_basis_var_input = Input(shape=(noise_dim,), name='enc_noise_basis_var_input')
+        super(MomentEstimationEncoder, self).__init__(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
+                                                      network_architecture=network_architecture,
+                                                      name='Posterior Moment Estimation Encoder')
 
         models = get_network_by_name['moment_estimation_encoder'][network_architecture](data_dim, noise_dim, latent_dim)
 
-        latent_model, latent_and_moments_model, noise_basis_vectors_moments_model = models
-        latent_factors = latent_model([data_input, noise_input])
-        self.encoder_inference_model = Model(inputs=[data_input, noise_input], outputs=latent_factors,
+        data_feature_extraction, noise_basis_extraction = models
+        coefficients = data_feature_extraction(self.data_input)
+        self.noise_sampler.arguments = {'mean': 0., 'variance': 1.}
+        # Lambda layer should called with a Keras tensor. Otherwise, unused input.
+        noise = self.noise_sampler(self.data_input)
+        noise_basis_vectors = noise_basis_extraction(noise)
+        weighted_vector = Multiply(name='enc_multiply_coeff_basis_vectors')([coefficients, noise_basis_vectors])
+        latent_factors = Add(name='enc_add_weighted_basis_vectors')(weighted_vector)
+
+        self.noise_sampler.arguments = {'mean': 0., 'variance': 1., 'n_samples': 1000}
+        more_noise = self.noise_sampler(self.data_input)
+        sampling_basis_vectors = noise_basis_extraction(more_noise)
+        # compute empirical mean as the batchsize-wise mean of all noise vectors
+        mean_basis_vectors = Lambda(lambda x: ker.mean(x, axis=0),
+                                    name='enc_noise_basis_vectors_mean')(sampling_basis_vectors)
+        # do the same for the empirical variance and compute similar posterior parametrization for the variance
+        var_basis_vectors = Lambda(lambda x: ker.var(x, axis=0),
+                                   name='enc_noise_basis_vectors_var')(sampling_basis_vectors)
+        # and parametrise the posterior moment as described in the AVB paper
+        posterior_mean = Lambda(lambda x: x[0] * x[1],
+                                name='enc_moments_mean')([coefficients, mean_basis_vectors])
+
+        # compute similar posterior parametrization for the variance
+        posterior_var = Lambda(lambda x: x[0] ** 2 * x[1],
+                               name='enc_moments_var')([coefficients, var_basis_vectors])
+
+        self.encoder_inference_model = Model(inputs=self.data_input, outputs=latent_factors,
                                              name='encoder_inference_model')
-        noise_basis_mean, noise_basis_var = noise_basis_vectors_moments_model(sampling_input)
-        self.encoder_noise_moment_estimation_model = Model(inputs=sampling_input, outputs=[noise_basis_mean,
-                                                                                           noise_basis_var],
-                                                           name='encoder_noise_moments_model')
-        latent_factors, posterior_mean, posterior_var = latent_and_moments_model([data_input, noise_input,
-                                                                                  noise_basis_mean_input,
-                                                                                  noise_basis_var_input])
-        self.encoder_trainable_model = Model(inputs=[data_input, noise_input,
-                                                     noise_basis_mean_input, noise_basis_var_input],
+        self.encoder_trainable_model = Model(inputs=self.data_input,
                                              outputs=[latent_factors, posterior_mean, posterior_var],
                                              name='encoder_trainable_model')
 
@@ -125,16 +167,13 @@ class MomentEstimationEncoder(object):
             An Encoder model.
         """
         is_learning = kwargs.get('is_learning', True)
-        estimate_noise_moments = kwargs.get('estimate_noise_moments', True)
         if is_learning:
-            if estimate_noise_moments:
-                return self.encoder_noise_moment_estimation_model(args[0])
             return self.encoder_trainable_model(args[0])
         else:
             return self.encoder_inference_model(args[0])
 
 
-class ReparametrisedGaussianEncoder(object):
+class ReparametrisedGaussianEncoder(BaseEncoder):
     """
     A ReparametrisedGaussianEncoder model is trained to parametrise a Gaussian latent variables:
 
@@ -156,21 +195,22 @@ class ReparametrisedGaussianEncoder(object):
             latent_dim: int, flattened latent space dimensionality
             network_architecture: str, the architecture name for the body of the reparametrised Gaussian Encoder model
         """
-        logger.info("Initialising Reparametrised Gaussian Encoder model with {} dimensional data "
-                    "and {} dimensional latent output".format(data_dim, noise_dim, latent_dim))
+        super(ReparametrisedGaussianEncoder, self).__init__(data_dim=data_dim,
+                                                            noise_dim=noise_dim,
+                                                            latent_dim=latent_dim,
+                                                            network_architecture=network_architecture,
+                                                            name='Reparametrised Gaussian Encoder')
 
-        data_input = Input(shape=(data_dim,), name='rep_enc_input_data')
-        noise_input = Input(shape=(noise_dim,), name='rep_enc_input_noise')
+        latent_mean, latent_log_var = get_network_by_name['reparametrised_encoder'][network_architecture](
+            self.data_input, latent_dim)
 
-        latent_mean, latent_log_var = get_network_by_name['reparametrised_encoder'][network_architecture](data_input,
-                                                                                                          latent_dim)
-
+        self.noise_sampler.arguments = {'mean': 0., 'variance': 1.}
+        noise = self.noise_sampler(self.data_input)
         latent_factors = Lambda(lambda x: x[0] + ker.exp(x[1] / 2.0) * x[2],
-                                name='rep_enc_reparametrised_latent')([latent_mean, latent_log_var, noise_input])
+                                name='enc_reparametrised_latent')([latent_mean, latent_log_var, noise])
 
-        self.encoder_inference_model = Model(inputs=[data_input, noise_input], outputs=latent_factors,
-                                             name='reparametrised_encoder')
-        self.encoder_learning_model = Model(inputs=[data_input, noise_input],
+        self.encoder_inference_model = Model(inputs=self.data_input, outputs=latent_factors, name='encoder')
+        self.encoder_learning_model = Model(inputs=self.data_input,
                                             outputs=[latent_factors, latent_mean, latent_log_var])
 
     def __call__(self, *args, **kwargs):
