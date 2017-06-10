@@ -26,13 +26,17 @@ class BaseDiscriminator(object):
         self.discriminator_from_posterior_model = None
 
     def sample_adaptive_normal_noise(self, inputs, **kwargs):
-        mu = kwargs.get('mean', ker.constant(0., dtype=ker.floatx()))
-        sigma2 = kwargs.get('variance', ker.constant(1., dtype=ker.floatx()))
-        n_samples = kwargs.get('n_samples', ker.shape(inputs)[0])
-        samples_isotropic = ker.random_normal(shape=(n_samples, self.latent_dim),
-                                              mean=0, stddev=1, seed=config['general']['seed'])
-        samples = mu + ker.sqrt(sigma2) * samples_isotropic
-        return samples
+        if isinstance(inputs, list):
+            mu, sigma2 = inputs
+            n_samples = kwargs.get('n_samples', ker.shape(mu)[0])
+            samples_isotropic = ker.random_normal(shape=(n_samples, self.latent_dim),
+                                                  mean=0, stddev=1, seed=config['general']['seed'])
+            samples = mu + ker.sqrt(sigma2) * samples_isotropic
+            return samples
+        else:
+            samples_isotropic = ker.random_normal(shape=(ker.shape(inputs)[0], self.latent_dim),
+                                                  mean=0, stddev=1, seed=config['general']['seed'])
+            return samples_isotropic
 
     def __call__(self, *args, **kwargs):
         return None
@@ -136,8 +140,8 @@ class AdaptivePriorDiscriminator(BaseDiscriminator):
         self.prior_mean = Input(shape=(latent_dim,), name='disc_prior_mean_input')
         self.prior_var = Input(shape=(latent_dim,), name='disc_prior_var_input')
         discriminator_model = get_network_by_name['discriminator'][network_architecture](data_dim, latent_dim)
-        self.prior_sampler.arguments = {'mean': self.prior_mean, 'variance': self.prior_var}
-        prior_distribution = self.prior_sampler(self.data_input)
+        # self.prior_sampler.arguments = {'mean': self.prior_mean, 'variance': self.prior_var}
+        prior_distribution = self.prior_sampler([self.prior_mean, self.prior_var])
         from_prior_output = discriminator_model([self.data_input, prior_distribution])
         self.discriminator_from_prior_model = Model(inputs=[self.data_input, self.prior_mean, self.prior_var],
                                                     outputs=from_prior_output,

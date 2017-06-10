@@ -2,7 +2,7 @@ import logging
 import keras.backend as ker
 
 from keras.models import Input
-from keras.layers import Lambda, Concatenate, Multiply, Dense
+from keras.layers import Lambda, Concatenate, Multiply
 from keras.models import Model
 
 from architectures import get_network_by_name
@@ -22,8 +22,8 @@ class BaseEncoder(object):
         self.latent_dim = latent_dim
         self.network_architecture = network_architecture
         self.data_input = Input(shape=(data_dim,), name='enc_data_input')
-        self.standard_noise_sampler = Lambda(self.sample_standard_normal_noise, name='enc_standard_noise_sampler')
-        self.standard_noise_sampler2 = Lambda(self.sample_standard_normal_noise, name='enc_standard_noise_sampler2')
+        self.standard_normal_sampler = Lambda(self.sample_standard_normal_noise, name='enc_standard_normal_sampler')
+        self.standard_normal_sampler2 = Lambda(self.sample_standard_normal_noise, name='enc_standard_normal_sampler2')
 
     def sample_standard_normal_noise(self, inputs, **kwargs):
         n_samples = kwargs.get('n_samples', ker.shape(inputs)[0])
@@ -69,8 +69,8 @@ class Encoder(BaseEncoder):
         super(Encoder, self).__init__(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
                                       network_architecture=network_architecture, name='Standard Encoder')
 
-        self.standard_noise_sampler.arguments = {'mode': 'concatenate'}
-        data_noise_concat = self.standard_noise_sampler(self.data_input)
+        self.standard_normal_sampler.arguments = {'mode': 'concatenate'}
+        data_noise_concat = self.standard_normal_sampler(self.data_input)
         latent_factors = get_network_by_name['encoder'][network_architecture](data_noise_concat, latent_dim)
         self.encoder_model = Model(inputs=self.data_input, outputs=latent_factors, name='encoder')
 
@@ -123,14 +123,14 @@ class MomentEstimationEncoder(BaseEncoder):
 
         data_feature_extraction, noise_basis_extraction = models
         coefficients = data_feature_extraction(self.data_input)
-        # Lambda layer should be called with a Keras tensor. Otherwise, unused input.
-        noise = self.standard_noise_sampler(self.data_input)
+        # the sampling Lambda layer should be called with a Keras tensor. Otherwise, unused input.
+        noise = self.standard_normal_sampler(self.data_input)
         noise_basis_vectors = noise_basis_extraction(noise)
-        weighted_vector = Multiply(name='enc_multiply_coeff_basis_vectors')([coefficients, noise_basis_vectors])
-        latent_factors = Lambda(lambda x: ker.sum(x, axis=0), name='enc_add_weighted_basis_vectors')(weighted_vector)
+        weighted_vectors = Multiply(name='enc_multiply_coeff_basis_vectors')([coefficients, noise_basis_vectors])
+        latent_factors = Lambda(lambda x: ker.sum(x, axis=1), name='enc_add_weighted_basis_vectors')(weighted_vectors)
 
-        self.standard_noise_sampler2.arguments = {'n_samples': 1000}
-        more_noise = self.standard_noise_sampler2(self.data_input)
+        self.standard_normal_sampler2.arguments = {'n_samples': 1000}
+        more_noise = self.standard_normal_sampler2(self.data_input)
         sampling_basis_vectors = noise_basis_extraction(more_noise)
         # compute empirical mean as the batchsize-wise mean of all noise vectors
         mean_basis_vectors = Lambda(lambda x: ker.mean(x, axis=0),
@@ -139,11 +139,11 @@ class MomentEstimationEncoder(BaseEncoder):
         var_basis_vectors = Lambda(lambda x: ker.var(x, axis=0),
                                    name='enc_noise_basis_vectors_var')(sampling_basis_vectors)
         # and parametrise the posterior moment as described in the AVB paper
-        posterior_mean = Lambda(lambda x: x[0] * x[1],
+        posterior_mean = Lambda(lambda x: ker.sum(x[0] * x[1], axis=1),
                                 name='enc_moments_mean')([coefficients, mean_basis_vectors])
 
         # compute similar posterior parametrization for the variance
-        posterior_var = Lambda(lambda x: x[0] ** 2 * x[1],
+        posterior_var = Lambda(lambda x: ker.sum(x[0] ** 2 * x[1], axis=1),
                                name='enc_moments_var')([coefficients, var_basis_vectors])
 
         self.encoder_inference_model = Model(inputs=self.data_input, outputs=latent_factors,
@@ -166,8 +166,7 @@ class MomentEstimationEncoder(BaseEncoder):
         is_learning = kwargs.get('is_learning', True)
         if is_learning:
             return self.encoder_trainable_model(args[0])
-        else:
-            return self.encoder_inference_model(args[0])
+        return self.encoder_inference_model(args[0])
 
 
 class ReparametrisedGaussianEncoder(BaseEncoder):
@@ -201,7 +200,7 @@ class ReparametrisedGaussianEncoder(BaseEncoder):
         latent_mean, latent_log_var = get_network_by_name['reparametrised_encoder'][network_architecture](
             self.data_input, latent_dim)
 
-        noise = self.standard_noise_sampler(self.data_input)
+        noise = self.standard_normal_sampler(self.data_input)
         latent_factors = Lambda(lambda x: x[0] + ker.exp(x[1] / 2.0) * x[2],
                                 name='enc_reparametrised_latent')([latent_mean, latent_log_var, noise])
 

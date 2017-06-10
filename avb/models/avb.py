@@ -3,7 +3,6 @@ import os
 from tqdm import tqdm
 
 from keras.optimizers import RMSprop
-from keras.models import Input
 from ..models.freezable import FreezableModel
 from ..models.base_vae import BaseVariationalAutoencoder
 
@@ -80,16 +79,8 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
                                                                         discriminator_output_posterior])
 
             # define the trainable models
-            if use_adaptive_contrast:
-                discriminator_prior_mean_input = Input(shape=(self.latent_dim,), name='disc_prior_mean_input')
-                discriminator_prior_var_input = Input(shape=(self.latent_dim,), name='disc_prior_var_input')
-                self.avb_trainable_discriminator = FreezableModel(inputs=[self.data_input,
-                                                                          discriminator_prior_mean_input,
-                                                                          discriminator_prior_var_input],
-                                                                  outputs=discriminator_loss, name_prefix=['disc'])
-            else:
-                self.avb_trainable_discriminator = FreezableModel(inputs=self.data_input,
-                                                                  outputs=discriminator_loss, name_prefix=['disc'])
+            self.avb_trainable_discriminator = FreezableModel(inputs=self.data_input,
+                                                              outputs=discriminator_loss, name_prefix=['disc'])
             self.avb_trainable_encoder_decoder = FreezableModel(inputs=self.data_input,
                                                                 outputs=decoder_loss, name_prefix=['dec', 'enc'])
 
