@@ -40,8 +40,7 @@ class GaussianVariationalAutoencoder(BaseVariationalAutoencoder):
             self.vae_model.compile(optimizer=RMSprop(lr=1e-3), loss=None)
 
         self.models_dict['trainable']['vae_model'] = self.vae_model
-        self.data_iterator = VAEDataIterator(data_dim=data_dim, latent_dim=latent_dim, noise_dim=latent_dim,
-                                             seed=config['general']['seed'], prior_distribution='standard_normal')
+        self.data_iterator = VAEDataIterator(data_dim=data_dim, latent_dim=latent_dim, seed=config['general']['seed'])
 
     def fit(self, data, batch_size=32, epochs=1, **kwargs):
         """
