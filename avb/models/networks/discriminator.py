@@ -1,7 +1,7 @@
 import logging
 import keras.backend as ker
 
-from keras.layers import Activation, Lambda
+from keras.layers import Lambda
 from keras.models import Model, Input
 from architectures import get_network_by_name
 
@@ -14,19 +14,22 @@ logger = logging.getLogger(__name__)
 class BaseDiscriminator(object):
     def __init__(self, data_dim, latent_dim, network_architecture='synthetic', name='discriminator'):
         logger.info("Initialising {} model with {}-dimensional data "
-                    "and {}-dimensional prior input.".format(name, data_dim, latent_dim))
+                    "and {}-dimensional prior/latent input.".format(name, data_dim, latent_dim))
         self.name = name
         self.data_dim = data_dim
         self.latent_dim = latent_dim
         self.network_architecture = network_architecture
         self.data_input = Input(shape=(data_dim,), name='disc_data_input')
         self.latent_input = Input(shape=(latent_dim,), name='disc_latent_input')
-        self.prior_sampler = Lambda(self.prior_sample, name='disc_prior_sampler')
+        self.prior_sampler = Lambda(self.sample_adaptive_normal_noise, name='disc_prior_sampler')
+        self.discriminator_from_prior_model = None
+        self.discriminator_from_posterior_model = None
 
-    def prior_sample(self, inputs, **kwargs):
-        mu = kwargs.get('mean', 0.)
-        sigma2 = kwargs.get('variance', 1.)
-        samples_isotropic = ker.random_normal(shape=(ker.shape(self.data_input)[0], self.latent_dim),
+    def sample_adaptive_normal_noise(self, inputs, **kwargs):
+        mu = kwargs.get('mean', ker.constant(0., dtype=ker.floatx()))
+        sigma2 = kwargs.get('variance', ker.constant(1., dtype=ker.floatx()))
+        n_samples = kwargs.get('n_samples', ker.shape(inputs)[0])
+        samples_isotropic = ker.random_normal(shape=(n_samples, self.latent_dim),
                                               mean=0, stddev=1, seed=config['general']['seed'])
         samples = mu + ker.sqrt(sigma2) * samples_isotropic
         return samples
@@ -68,10 +71,15 @@ class Discriminator(BaseDiscriminator):
                                             network_architecture=network_architecture,
                                             name='Standard Discriminator')
 
-        discriminator_output = get_network_by_name['discriminator'][network_architecture]([self.data_input,
-                                                                                           self.latent_input])
-        self.discriminator_model = Model(inputs=[self.data_input, self.latent_input],
-                                         outputs=discriminator_output, name='discriminator')
+        discriminator_model = get_network_by_name['discriminator'][network_architecture](self.data_dim, self.latent_dim)
+        prior_distribution = self.prior_sampler(self.data_input)
+        from_prior_output = discriminator_model([self.data_input, prior_distribution])
+        self.discriminator_from_prior_model = Model(inputs=self.data_input, outputs=from_prior_output,
+                                                    name='discriminator_from_prior')
+        from_posterior_output = discriminator_model([self.data_input, self.latent_input])
+        self.discriminator_from_posterior_model = Model(inputs=[self.data_input, self.latent_input],
+                                                        outputs=from_posterior_output,
+                                                        name='discriminator_from_posterior')
 
     def __call__(self, *args, **kwargs):
         """
@@ -84,7 +92,10 @@ class Discriminator(BaseDiscriminator):
         Returns:
             A trainable Discriminator model. 
         """
-        return self.discriminator_model(args[0])
+        from_posterior = kwargs.get('from_posterior', False)
+        if not from_posterior:
+            return self.discriminator_from_prior_model(args[0])
+        return self.discriminator_from_posterior_model(args[0])
 
 
 class AdaptivePriorDiscriminator(BaseDiscriminator):
@@ -124,8 +135,17 @@ class AdaptivePriorDiscriminator(BaseDiscriminator):
 
         self.prior_mean = Input(shape=(latent_dim,), name='disc_prior_mean_input')
         self.prior_var = Input(shape=(latent_dim,), name='disc_prior_var_input')
-        discriminator_output = get_network_by_name['discriminator'][network_architecture](self.data_input)
-        self.discriminator_model = Model(inputs=self.data_input, outputs=discriminator_output, name='discriminator')
+        discriminator_model = get_network_by_name['discriminator'][network_architecture](data_dim, latent_dim)
+        self.prior_sampler.arguments = {'mean': self.prior_mean, 'variance': self.prior_var}
+        prior_distribution = self.prior_sampler(self.data_input)
+        from_prior_output = discriminator_model([self.data_input, prior_distribution])
+        self.discriminator_from_prior_model = Model(inputs=[self.data_input, self.prior_mean, self.prior_var],
+                                                    outputs=from_prior_output,
+                                                    name='discriminator_from_prior')
+        from_posterior_output = discriminator_model([self.data_input, self.latent_input])
+        self.discriminator_from_posterior_model = Model(inputs=[self.data_input, self.latent_input],
+                                                        outputs=from_posterior_output,
+                                                        name='discriminator_from_posterior')
 
     def __call__(self, *args, **kwargs):
         """
@@ -138,4 +158,7 @@ class AdaptivePriorDiscriminator(BaseDiscriminator):
         Returns:
             A trainable Discriminator model. 
         """
-        return self.discriminator_model(args[0])
+        from_posterior = kwargs.get('from_posterior', False)
+        if not from_posterior:
+            return self.discriminator_from_prior_model(args[0])
+        return self.discriminator_from_posterior_model(args[0])

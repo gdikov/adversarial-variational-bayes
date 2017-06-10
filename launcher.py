@@ -9,22 +9,22 @@ from utils.logger import logger
 #   * CelebA
 
 if __name__ == '__main__':
-    # data_dim = 4
-    # data = load_npoints(n=data_dim)
-    data_dim = 28*28
-    data = load_mnist(binarised=True, one_hot=False)
+    data_dim = 4
+    data = load_npoints(n=data_dim)
+    # data_dim = 28*28
+    # data = load_mnist(binarised=True, one_hot=False)
 
-    train_data, train_labels = data['data'][:10], data['target'][:10]
+    train_data, train_labels = data['data'], data['target']
 
     # trainer = VAEModelTrainer(data_dim=data_dim, latent_dim=2, experiment_name='mnist', overwrite=True)
     # trainer.run_training(train_data, batch_size=1024, epochs=2000)
 
-    trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=2, noise_dim=data_dim/28, experiment_name='mnist',
-                              overwrite=True, use_adaptive_contrast=True)
-    model_dir = trainer.run_training(train_data, batch_size=10, epochs=5)
+    trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=2, noise_dim=data_dim, experiment_name='synthetic',
+                              overwrite=True, use_adaptive_contrast=False)
+    model_dir = trainer.run_training(train_data, batch_size=1024, epochs=2000)
     trained_model = trainer.get_model()
 
-    latent_vars = trained_model.infer(train_data, batch_size=10)
+    latent_vars = trained_model.infer(train_data, batch_size=1024)
 
     plot_latent_2d(latent_vars, train_labels, fig_dirpath='output/')
 

@@ -2,7 +2,7 @@ import logging
 import keras.backend as ker
 
 from keras.models import Input
-from keras.layers import Lambda, Concatenate, Multiply, Add
+from keras.layers import Lambda, Concatenate, Multiply, Dense
 from keras.models import Model
 
 from architectures import get_network_by_name
@@ -22,20 +22,18 @@ class BaseEncoder(object):
         self.latent_dim = latent_dim
         self.network_architecture = network_architecture
         self.data_input = Input(shape=(data_dim,), name='enc_data_input')
-        self.noise_sampler = Lambda(self.sample_noise, name='enc_noise_sampler')
+        self.standard_noise_sampler = Lambda(self.sample_standard_normal_noise, name='enc_standard_noise_sampler')
+        self.standard_noise_sampler2 = Lambda(self.sample_standard_normal_noise, name='enc_standard_noise_sampler2')
 
-    def sample_noise(self, inputs, **kwargs):
-        mu = kwargs.get('mean', 0.)
-        sigma2 = kwargs.get('variance', 1.)
-        n_samples = kwargs.get('n_samples', ker.shape(self.data_input)[0])
+    def sample_standard_normal_noise(self, inputs, **kwargs):
+        n_samples = kwargs.get('n_samples', ker.shape(inputs)[0])
         samples_isotropic = ker.random_normal(shape=(n_samples, self.noise_dim),
                                               mean=0, stddev=1, seed=config['general']['seed'])
-        samples = mu + ker.sqrt(sigma2) * samples_isotropic
         op_mode = kwargs.get('mode', 'none')
         if op_mode == 'concatenate':
-            concat = Concatenate(axis=1, name='enc_noise_concatenation')([inputs, samples])
+            concat = Concatenate(axis=1, name='enc_noise_concatenation')([inputs, samples_isotropic])
             return concat
-        return samples
+        return samples_isotropic
 
     def __call__(self, *args, **kwargs):
         return None
@@ -71,8 +69,8 @@ class Encoder(BaseEncoder):
         super(Encoder, self).__init__(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
                                       network_architecture=network_architecture, name='Standard Encoder')
 
-        self.noise_sampler.arguments = {'mean': 0., 'variance': 1., 'mode': 'concatenate'}
-        data_noise_concat = self.noise_sampler(self.data_input)
+        self.standard_noise_sampler.arguments = {'mode': 'concatenate'}
+        data_noise_concat = self.standard_noise_sampler(self.data_input)
         latent_factors = get_network_by_name['encoder'][network_architecture](data_noise_concat, latent_dim)
         self.encoder_model = Model(inputs=self.data_input, outputs=latent_factors, name='encoder')
 
@@ -125,15 +123,14 @@ class MomentEstimationEncoder(BaseEncoder):
 
         data_feature_extraction, noise_basis_extraction = models
         coefficients = data_feature_extraction(self.data_input)
-        self.noise_sampler.arguments = {'mean': 0., 'variance': 1.}
-        # Lambda layer should called with a Keras tensor. Otherwise, unused input.
-        noise = self.noise_sampler(self.data_input)
+        # Lambda layer should be called with a Keras tensor. Otherwise, unused input.
+        noise = self.standard_noise_sampler(self.data_input)
         noise_basis_vectors = noise_basis_extraction(noise)
         weighted_vector = Multiply(name='enc_multiply_coeff_basis_vectors')([coefficients, noise_basis_vectors])
-        latent_factors = Add(name='enc_add_weighted_basis_vectors')(weighted_vector)
+        latent_factors = Lambda(lambda x: ker.sum(x, axis=0), name='enc_add_weighted_basis_vectors')(weighted_vector)
 
-        self.noise_sampler.arguments = {'mean': 0., 'variance': 1., 'n_samples': 1000}
-        more_noise = self.noise_sampler(self.data_input)
+        self.standard_noise_sampler2.arguments = {'n_samples': 1000}
+        more_noise = self.standard_noise_sampler2(self.data_input)
         sampling_basis_vectors = noise_basis_extraction(more_noise)
         # compute empirical mean as the batchsize-wise mean of all noise vectors
         mean_basis_vectors = Lambda(lambda x: ker.mean(x, axis=0),
@@ -204,14 +201,14 @@ class ReparametrisedGaussianEncoder(BaseEncoder):
         latent_mean, latent_log_var = get_network_by_name['reparametrised_encoder'][network_architecture](
             self.data_input, latent_dim)
 
-        self.noise_sampler.arguments = {'mean': 0., 'variance': 1.}
-        noise = self.noise_sampler(self.data_input)
+        noise = self.standard_noise_sampler(self.data_input)
         latent_factors = Lambda(lambda x: x[0] + ker.exp(x[1] / 2.0) * x[2],
                                 name='enc_reparametrised_latent')([latent_mean, latent_log_var, noise])
 
-        self.encoder_inference_model = Model(inputs=self.data_input, outputs=latent_factors, name='encoder')
+        self.encoder_inference_model = Model(inputs=self.data_input, outputs=latent_factors, name='encoder_inference')
         self.encoder_learning_model = Model(inputs=self.data_input,
-                                            outputs=[latent_factors, latent_mean, latent_log_var])
+                                            outputs=[latent_factors, latent_mean, latent_log_var],
+                                            name='encoder_learning')
 
     def __call__(self, *args, **kwargs):
         """

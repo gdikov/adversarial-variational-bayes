@@ -36,14 +36,13 @@ class BaseVariationalAutoencoder(object):
                 raise AttributeError("Initialise the attributes `encoder` and `decoder` in the child classes first!")
 
             self.data_input = Input(shape=(data_dim,), name='{}_data_input'.format(name_prefix))
-            self.noise_input = Input(shape=(noise_dim,), name='{}_noise_input'.format(name_prefix))
-            self.latent_prior_input = Input(shape=(latent_dim,), name='{}_latent_prior_input'.format(name_prefix))
+            self.latent_input = Input(shape=(latent_dim,), name='{}_latent_prior_input'.format(name_prefix))
 
             # define the deployable models (for evaluation purposes only)
-            self.inference_model = Model(inputs=[self.data_input, self.noise_input],
-                                         outputs=self.encoder([self.data_input, self.noise_input], is_learning=False))
-            self.generative_model = Model(inputs=self.latent_prior_input, outputs=self.decoder(self.latent_prior_input,
-                                                                                               is_learning=False))
+            self.inference_model = Model(inputs=self.data_input, outputs=self.encoder(self.data_input,
+                                                                                      is_learning=False))
+            self.generative_model = Model(inputs=self.latent_input, outputs=self.decoder(self.latent_input,
+                                                                                         is_learning=False))
             self.models_dict['deployable']['inference_model'] = self.inference_model
             self.models_dict['deployable']['generative_model'] = self.generative_model
 
@@ -89,6 +88,7 @@ class BaseVariationalAutoencoder(object):
         Returns:
             The generated data as ndarray of shape (n_samples, data_dim)
         """
+        return_probs = kwargs.get('return_probs', True)
         if not hasattr(self, 'data_iterator'):
             raise AttributeError("Initialise the data iterator in the child classes first!")
         n_samples_per_axis = complex(int(np.sqrt(n_samples)))
@@ -96,6 +96,8 @@ class BaseVariationalAutoencoder(object):
         gaussian_grid = standard_gaussian.ppf(uniform_grid)
         data_iterator, n_iters = self.data_iterator.iter(gaussian_grid, batch_size=batch_size, mode='generation')
         data_probs = self.generative_model.predict_generator(data_iterator, steps=n_iters)
+        if return_probs:
+            return data_probs
         sampled_data = np.random.binomial(1, p=data_probs)
         return sampled_data
 

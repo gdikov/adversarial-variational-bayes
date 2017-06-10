@@ -33,11 +33,10 @@ class GaussianVariationalAutoencoder(BaseVariationalAutoencoder):
                                                              resume_from=resume_from,
                                                              deployable_models_only=deployable_models_only)
         if resume_from is None:
-            posterior_approximation, latent_mean, latent_log_var = self.encoder([self.data_input, self.noise_input],
-                                                                                is_learning=True)
+            posterior_approximation, latent_mean, latent_log_var = self.encoder(self.data_input, is_learning=True)
             reconstruction_log_likelihood = self.decoder([self.data_input, posterior_approximation], is_learning=True)
             vae_loss = VAELossLayer(name='vae_loss')([reconstruction_log_likelihood, latent_mean, latent_log_var])
-            self.vae_model = Model(inputs=[self.data_input, self.noise_input], outputs=vae_loss)
+            self.vae_model = Model(inputs=self.data_input, outputs=vae_loss)
             self.vae_model.compile(optimizer=RMSprop(lr=1e-3), loss=None)
 
         self.models_dict['trainable']['vae_model'] = self.vae_model

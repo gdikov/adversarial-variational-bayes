@@ -76,13 +76,18 @@ def synthetic_decoder(inputs):
     return decoder_body
 
 
-def synthetic_discriminator(inputs):
-    data_input, latent_input = inputs
+def synthetic_discriminator(data_dim, latent_dim):
+    data_input = Input(shape=(data_dim,), name='disc_internal_data_input')
     discriminator_body_data = repeat_dense(data_input, n_layers=2, n_units=256, name_prefix='disc_body_data')
+
+    latent_input = Input(shape=(latent_dim,), name='disc_internal_latent_input')
     discriminator_body_latent = repeat_dense(latent_input, n_layers=2, n_units=256, name_prefix='disc_body_latent')
+
     merged_data_latent = Dot(axes=1, name='disc_merge')([discriminator_body_data, discriminator_body_latent])
     discriminator_output = Activation(activation='sigmoid', name='disc_output')(merged_data_latent)
-    return discriminator_output
+    discriminator_model = Model(inputs=[data_input, latent_input], outputs=discriminator_output,
+                                name='disc_internal_model')
+    return discriminator_model
 
 
 """ Architectures for reproducing paper experiments on the MNIST dataset. """
@@ -114,10 +119,11 @@ def mnist_moment_estimation_encoder(data_dim, noise_dim, latent_dim=8):
     convnet_input = Reshape((28, 28, 1), name='enc_data_reshape')(data_input)
     coefficients = deflating_convolution(convnet_input, n_deflation_layers=1,
                                          n_filters_init=4, name_prefix='enc_data_body')
-    coefficients = Reshape((-1,), name='enc_coefficients_reshape')(coefficients)
-    coefficients = Dense(noise_dim, name='enc_coefficients')(coefficients)
+    coefficients = Reshape((-1,), name='enc_data_features_reshape')(coefficients)
+    coefficients = Dense(noise_dim * latent_dim, name='enc_coefficients')(coefficients)
+    coefficients = Reshape((noise_dim, latent_dim), name='enc_coefficients_reshape')(coefficients)
     assert coefficients.get_shape().as_list() == [None, noise_dim, latent_dim]
-    coefficients_model = Model(inputs=data_input, outputs=coefficients, name='enc_noise_basis_vector_model')
+    coefficients_model = Model(inputs=data_input, outputs=coefficients, name='enc_coefficients_model')
 
     return coefficients_model, noise_basis_vectors_model
 
@@ -133,13 +139,18 @@ def mnist_decoder(inputs):
     return decoder_body
 
 
-def mnist_discriminator(inputs):
-    data_input, latent_input = inputs
-    discriminator_body_data = repeat_dense(data_input, n_layers=2, n_units=256, name_prefix='disc_body_data')
-    discriminator_body_latent = repeat_dense(latent_input, n_layers=2, n_units=256, name_prefix='disc_body_latent')
+def mnist_discriminator(data_dim, latent_dim):
+    data_input = Input(shape=(data_dim,), name='disc_internal_data_input')
+    discriminator_body_data = repeat_dense(data_input, n_layers=4, n_units=512, name_prefix='disc_body_data')
+
+    latent_input = Input(shape=(latent_dim,), name='disc_internal_latent_input')
+    discriminator_body_latent = repeat_dense(latent_input, n_layers=4, n_units=512, name_prefix='disc_body_latent')
+
     merged_data_latent = Dot(axes=1, name='disc_merge')([discriminator_body_data, discriminator_body_latent])
     discriminator_output = Activation(activation='sigmoid', name='disc_output')(merged_data_latent)
-    return discriminator_output
+    discriminator_model = Model(inputs=[data_input, latent_input], outputs=discriminator_output,
+                                name='disc_internal_model')
+    return discriminator_model
 
 
 get_network_by_name = {'encoder': {'synthetic': synthetic_encoder,
@@ -149,4 +160,5 @@ get_network_by_name = {'encoder': {'synthetic': synthetic_encoder,
                        'decoder': {'synthetic': synthetic_decoder,
                                    'mnist': mnist_decoder},
                        'discriminator': {'synthetic': synthetic_discriminator,
-                                         'mnist': mnist_discriminator}}
+                                         'mnist': mnist_discriminator}
+                       }
