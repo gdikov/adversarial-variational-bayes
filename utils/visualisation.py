@@ -1,5 +1,5 @@
 import numpy as np
-from os.path import join as path_join
+import os
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -14,7 +14,9 @@ def plot_latent_2d(latent_vars, target=None, fig_dirpath=None):
         raise NotImplementedError
     plt.colorbar()
     if fig_dirpath is not None:
-        plt.savefig(path_join(fig_dirpath, 'latent_space.png'))
+        if not os.path.exists(fig_dirpath):
+            os.makedirs(fig_dirpath)
+        plt.savefig(os.path.join(fig_dirpath, 'latent_space.png'))
     else:
         plt.show()
 
@@ -29,6 +31,8 @@ def plot_sampled_data(data, sample_side_size,  fig_dirpath=None):
     plt.figure(figsize=(10, 10))
     plt.imshow(data, cmap='Greys_r')
     if fig_dirpath is not None:
-        plt.savefig(path_join(fig_dirpath, 'sampled_data.png'))
+        if not os.path.exists(fig_dirpath):
+            os.makedirs(fig_dirpath)
+        plt.savefig(os.path.join(fig_dirpath, 'sampled_data.png'))
     else:
         plt.show()
