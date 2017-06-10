@@ -1,5 +1,5 @@
-from keras.layers import Dense, Conv2DTranspose, Conv2D, Concatenate, Dot, Reshape, LocallyConnected1D
-from math import sqrt
+from keras.layers import Activation, Dense, Conv2DTranspose, Conv2D, Dot, Reshape, LocallyConnected1D
+from keras.models import Model, Input
 
 
 def repeat_dense(inputs, n_layers, n_units=256, activation='relu', name_prefix=None):
@@ -46,25 +46,19 @@ def inflating_convolution(inputs, n_inflation_layers, projection_space_shape=(4,
 
 
 def deflating_convolution(inputs, n_deflation_layers, n_filters_init=32, name_prefix=None):
-    deflated = Conv2D(filters=n_filters_init, kernel_size=(5, 5), strides=(1, 1),
+    deflated = Conv2D(filters=n_filters_init, kernel_size=(5, 5), strides=(2, 2),
                       padding='same', activation='relu', name=name_prefix + '_conv_0')(inputs)
     for i in xrange(1, n_deflation_layers):
-        deflated = Conv2D(filters=n_filters_init * (2**i), kernel_size=(5, 5), strides=(1, 1),
+        deflated = Conv2D(filters=n_filters_init * (2**i), kernel_size=(5, 5), strides=(2, 2),
                           padding='same', activation='relu', name=name_prefix + '_conv_{}'.format(i))(deflated)
     return deflated
-
-
-def residual_connection(inputs, output_shape, n_hidden):
-    raise NotImplementedError
 
 
 """ Architectures for reproducing paper experiments on the synthetic 4-points dataset. """
 
 
 def synthetic_encoder(inputs, latent_dim):
-    data_input, noise_input = inputs
-    encoder_input = Concatenate(axis=1, name='enc_data_noise_concat')([data_input, noise_input])
-    encoder_body = repeat_dense(encoder_input, n_layers=2, n_units=256, name_prefix='enc_body')
+    encoder_body = repeat_dense(inputs, n_layers=2, n_units=256, name_prefix='enc_body')
     latent_factors = Dense(latent_dim, activation=None, name='enc_latent')(encoder_body)
     return latent_factors
 
@@ -82,41 +76,61 @@ def synthetic_decoder(inputs):
     return decoder_body
 
 
-def synthetic_discriminator(inputs):
-    data_input, latent_input = inputs
+def synthetic_discriminator(data_dim, latent_dim):
+    data_input = Input(shape=(data_dim,), name='disc_internal_data_input')
     discriminator_body_data = repeat_dense(data_input, n_layers=2, n_units=256, name_prefix='disc_body_data')
+
+    latent_input = Input(shape=(latent_dim,), name='disc_internal_latent_input')
     discriminator_body_latent = repeat_dense(latent_input, n_layers=2, n_units=256, name_prefix='disc_body_latent')
+
     merged_data_latent = Dot(axes=1, name='disc_merge')([discriminator_body_data, discriminator_body_latent])
-    return merged_data_latent
+    discriminator_output = Activation(activation='sigmoid', name='disc_output')(merged_data_latent)
+    discriminator_model = Model(inputs=[data_input, latent_input], outputs=discriminator_output,
+                                name='disc_internal_model')
+    return discriminator_model
 
 
 """ Architectures for reproducing paper experiments on the MNIST dataset. """
 
 
 def mnist_encoder(inputs, latent_dim=8):
-    data_input, noise_input = inputs
-    data_dim = data_input.shape[1]
+    encoder_body = repeat_dense(inputs, n_layers=4, n_units=512, name_prefix='enc_body')
+    latent_factors = Dense(latent_dim, activation=None, name='enc_latent')(encoder_body)
+    return latent_factors
 
-    reshaped_noise = Reshape((-1, 1))(noise_input)
-    noise_basis_vectors = LocallyConnected1D(filters=16, kernel_size=1,
+
+def mnist_moment_estimation_encoder(data_dim, noise_dim, latent_dim=8):
+    noise_input = Input(shape=(noise_dim,), name='enc_internal_noise_input')
+    # compute the noise basis vectors by attaching small independent fully connected networks to each noise scalar input
+    reshaped_noise = Reshape((-1, 1), name='enc_noise_reshape')(noise_input)
+    noise_basis_vectors = LocallyConnected1D(filters=1, kernel_size=1,  # 16
                                              strides=1, activation='relu', name='enc_noise_f_0')(reshaped_noise)
-    noise_basis_vectors = LocallyConnected1D(filters=32, kernel_size=1,
+    noise_basis_vectors = LocallyConnected1D(filters=1, kernel_size=1,  # 32
                                              strides=1, activation='relu', name='enc_noise_f_1')(noise_basis_vectors)
     noise_basis_vectors = LocallyConnected1D(filters=latent_dim, kernel_size=1,
                                              strides=1, activation='relu', name='enc_noise_f_2')(noise_basis_vectors)
+    assert noise_basis_vectors.get_shape().as_list() == [None, noise_dim, latent_dim]
+    noise_basis_vectors_model = Model(inputs=noise_input, outputs=noise_basis_vectors,
+                                      name='enc_noise_basis_vector_model')
 
-    convnet_input = Reshape((int(sqrt(data_dim)), int(sqrt(data_dim))))(data_input)
-    coefficients = deflating_convolution(convnet_input, n_deflation_layers=3, name_prefix='enc_body')
-    coefficients = Reshape((-1,))(coefficients)
-    coefficients = Dense(latent_dim)(coefficients)
+    data_input = Input(shape=(data_dim,), name='enc_internal_data_input')
+    assert data_dim == 28 ** 2, "MNIST data should be flattened to a 784-dimensional vectors."
+    # compute the data embedding using deep convolutional neural network and reshape the output to the noise dim.
+    convnet_input = Reshape((28, 28, 1), name='enc_data_reshape')(data_input)
+    coefficients = deflating_convolution(convnet_input, n_deflation_layers=1,
+                                         n_filters_init=4, name_prefix='enc_data_body')
+    coefficients = Reshape((-1,), name='enc_data_features_reshape')(coefficients)
+    coefficients = Dense(noise_dim * latent_dim, name='enc_coefficients')(coefficients)
+    coefficients = Reshape((noise_dim, latent_dim), name='enc_coefficients_reshape')(coefficients)
+    assert coefficients.get_shape().as_list() == [None, noise_dim, latent_dim]
+    coefficients_model = Model(inputs=data_input, outputs=coefficients, name='enc_coefficients_model')
 
-    linear_combination = Dot(axes=-1)([noise_basis_vectors, coefficients])
-    return linear_combination
+    return coefficients_model, noise_basis_vectors_model
 
 
 def mnist_decoder(inputs):
     # use transposed convolutions to inflate the latent space to (?, 32, 32, 64)
-    decoder_body = inflating_convolution(inputs, 4, projection_space_shape=(2, 2, 512), name_prefix='dec_body')
+    decoder_body = inflating_convolution(inputs, 2, projection_space_shape=(2, 2, 128), name_prefix='dec_body')
     # use single non-padded convolution to shrink the size to (?, 28, 28, 1)
     decoder_body = Conv2D(filters=1, kernel_size=(5, 5), strides=(1, 1), activation='relu',
                           padding='valid', name='dec_body_conv')(decoder_body)
@@ -125,8 +139,26 @@ def mnist_decoder(inputs):
     return decoder_body
 
 
-def mnist_discriminator(inputs):
-    data_input, noise_input = inputs
-    discriminator_input = Concatenate(axis=1, name='disc_data_noise_concat')([data_input, noise_input])
-    discriminator_body = repeat_dense(discriminator_input, n_layers=4, n_units=1024, name_prefix='disc_body')
-    return discriminator_body
+def mnist_discriminator(data_dim, latent_dim):
+    data_input = Input(shape=(data_dim,), name='disc_internal_data_input')
+    discriminator_body_data = repeat_dense(data_input, n_layers=4, n_units=512, name_prefix='disc_body_data')
+
+    latent_input = Input(shape=(latent_dim,), name='disc_internal_latent_input')
+    discriminator_body_latent = repeat_dense(latent_input, n_layers=4, n_units=512, name_prefix='disc_body_latent')
+
+    merged_data_latent = Dot(axes=1, name='disc_merge')([discriminator_body_data, discriminator_body_latent])
+    discriminator_output = Activation(activation='sigmoid', name='disc_output')(merged_data_latent)
+    discriminator_model = Model(inputs=[data_input, latent_input], outputs=discriminator_output,
+                                name='disc_internal_model')
+    return discriminator_model
+
+
+get_network_by_name = {'encoder': {'synthetic': synthetic_encoder,
+                                   'mnist': mnist_encoder},
+                       'reparametrised_encoder': {'synthetic': synthetic_reparametrized_encoder},
+                       'moment_estimation_encoder': {'mnist': mnist_moment_estimation_encoder},
+                       'decoder': {'synthetic': synthetic_decoder,
+                                   'mnist': mnist_decoder},
+                       'discriminator': {'synthetic': synthetic_discriminator,
+                                         'mnist': mnist_discriminator}
+                       }

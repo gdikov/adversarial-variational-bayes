@@ -1,11 +1,29 @@
+import logging
 from tensorflow.contrib.distributions import Bernoulli
 from keras.layers import Lambda, Dense
 from keras.models import Model, Input
 
-from architectures import synthetic_decoder
+from architectures import get_network_by_name
+
+logger = logging.getLogger(__name__)
 
 
-class Decoder(object):
+class BaseDecoder(object):
+    def __init__(self, latent_dim, data_dim, network_architecture='synthetic', name='decoder'):
+        logger.info("Initialising {} model with {}-dimensional data "
+                    "and {}-dimensional latent input.".format(name, data_dim, latent_dim))
+        self.name = name
+        self.data_dim = data_dim
+        self.latent_dim = latent_dim
+        self.network_architecture = network_architecture
+        self.data_input = Input(shape=(self.data_dim,), name='dec_ll_estimator_data_input')
+        self.latent_input = Input(shape=(self.latent_dim,), name='dec_latent_input')
+
+    def __call__(self, *args, **kwargs):
+        return None
+
+
+class Decoder(BaseDecoder):
     """
     A Decoder model has inputs comprising of a latent encoding given by an Encoder model, a prior sampler 
     or other custom input and the raw Encoder data input, which is needed to estimate the reconstructed 
@@ -25,33 +43,31 @@ class Decoder(object):
     Note that the reconstruction loss is not used when the model training ends. It serves only the purpose to 
     define a measure of loss which is optimised. 
     """
-    def __init__(self, latent_dim, data_dim):
+    def __init__(self, latent_dim, data_dim, network_architecture='synthetic'):
         """
         Args:
             latent_dim: int, the flattened dimensionality of the latent space 
             data_dim: int, the flattened dimensionality of the output space (data space)
+            network_architecture: str, the architecture name for the body of the Decoder model
         """
-        self.latent_dim = latent_dim
-        self.data_dim = data_dim
+        super(Decoder, self).__init__(latent_dim=latent_dim, data_dim=data_dim,
+                                      network_architecture=network_architecture,
+                                      name='Standard Decoder')
+
+        generator_body = get_network_by_name['decoder'][network_architecture](self.latent_input)
 
         # NOTE: all decoder layers have names prefixed by `dec`.
         # This is essential for the partial model freezing during training.
-
-        real_data = Input(shape=(self.data_dim,), name='dec_ll_estimator_data_input')
-        latent_encoding = Input(shape=(self.latent_dim,), name='dec_latent_input')
-
-        generator_body = synthetic_decoder(latent_encoding)
-
         sampler_params = Dense(self.data_dim, activation='sigmoid', name='dec_sampler_params')(generator_body)
 
         # a probability clipping is necessary for the Bernoulli `log_prob` property produces NaNs in the border cases.
         sampler_params = Lambda(lambda x: 1e-6 + (1 - 2e-6) * x, name='dec_probs_clipper')(sampler_params)
 
         log_probs = Lambda(lambda x: Bernoulli(probs=x[0], name='dec_bernoulli').log_prob(x[1]),
-                           name='dec_bernoulli_logprob')([sampler_params, real_data])
+                           name='dec_bernoulli_logprob')([sampler_params, self.data_input])
 
-        self.generator = Model(inputs=latent_encoding, outputs=sampler_params, name='dec_sampling')
-        self.ll_estimator = Model(inputs=[real_data, latent_encoding], outputs=log_probs, name='dec_trainable')
+        self.generator = Model(inputs=self.latent_input, outputs=sampler_params, name='dec_sampling')
+        self.ll_estimator = Model(inputs=[self.data_input, self.latent_input], outputs=log_probs, name='dec_trainable')
 
     def __call__(self, *args, **kwargs):
         """

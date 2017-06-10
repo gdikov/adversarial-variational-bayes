@@ -1,18 +1,22 @@
 import logging
 import datetime
+import os
 
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(name)s:%(message)s')
 
-# fh = logging.FileHandler('/Users/admin/Documents/University/TUM/Master_Info/SS17/DLRW/'
-#                          'AdversarialVariationalBayes/logs/AVB_{}.log'.format(datetime.datetime.now().isoformat()))
+# log_path = os.path.join('output', 'log')
+# if not os.path.exists(log_path):
+#     os.makedirs(log_path)
+# filename = os.path.join(log_path, 'AVB_{}.log'.format(datetime.datetime.now().isoformat()))
+# fh = logging.FileHandler(filename)
 # fh.setLevel(logging.DEBUG)
 # fh.setFormatter(formatter)
 # logger.addHandler(fh)
 
 ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
+ch.setLevel(logging.INFO)
 ch.setFormatter(formatter)
 logger.addHandler(ch)

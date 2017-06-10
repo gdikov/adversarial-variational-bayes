@@ -1,6 +1,8 @@
+import logging
+
 from keras.models import Model
 
-from utils.logger import logger
+logger = logging.getLogger(__name__)
 
 
 class FreezableModel(Model):

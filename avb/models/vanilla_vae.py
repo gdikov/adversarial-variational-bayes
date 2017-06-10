@@ -12,16 +12,19 @@ config = load_config('global_config.yaml')
 
 
 class GaussianVariationalAutoencoder(BaseVariationalAutoencoder):
-    def __init__(self, data_dim, latent_dim, resume_from=None, deployable_models_only=False):
+    def __init__(self, data_dim, latent_dim, resume_from=None, deployable_models_only=False,
+                 experiment_architecture='synthetic'):
         """
         Args:
             data_dim: int, flattened data dimensionality 
             latent_dim: int, flattened latent dimensionality
             resume_from: str, optional folder name with pre-trained models 
             deployable_models_only: bool, whether only the inference and generative models should be instantiated
+            experiment_architecture: str, network architecture descriptor
         """
-        self.encoder = ReparametrisedGaussianEncoder(data_dim=data_dim, noise_dim=latent_dim, latent_dim=latent_dim)
-        self.decoder = Decoder(data_dim=data_dim, latent_dim=latent_dim)
+        self.encoder = ReparametrisedGaussianEncoder(data_dim=data_dim, noise_dim=latent_dim, latent_dim=latent_dim,
+                                                     network_architecture=experiment_architecture)
+        self.decoder = Decoder(data_dim=data_dim, latent_dim=latent_dim, network_architecture=experiment_architecture)
         self.models_dict = {'deployable': {'inference_model': None, 'generative_model': None},
                             'trainable': {'vae_model': None}}
         # init the base class' inputs and deployable models and reuse them in the paer
@@ -30,16 +33,14 @@ class GaussianVariationalAutoencoder(BaseVariationalAutoencoder):
                                                              resume_from=resume_from,
                                                              deployable_models_only=deployable_models_only)
         if resume_from is None:
-            posterior_approximation, latent_mean, latent_log_var = self.encoder([self.data_input, self.noise_input],
-                                                                                is_learning=True)
+            posterior_approximation, latent_mean, latent_log_var = self.encoder(self.data_input, is_learning=True)
             reconstruction_log_likelihood = self.decoder([self.data_input, posterior_approximation], is_learning=True)
             vae_loss = VAELossLayer(name='vae_loss')([reconstruction_log_likelihood, latent_mean, latent_log_var])
-            self.vae_model = Model(inputs=[self.data_input, self.noise_input], outputs=vae_loss)
+            self.vae_model = Model(inputs=self.data_input, outputs=vae_loss)
             self.vae_model.compile(optimizer=RMSprop(lr=1e-3), loss=None)
 
         self.models_dict['trainable']['vae_model'] = self.vae_model
-        self.data_iterator = VAEDataIterator(data_dim=data_dim, latent_dim=latent_dim, noise_dim=latent_dim,
-                                             seed=config['general']['seed'], noise_distribution='normal')
+        self.data_iterator = VAEDataIterator(data_dim=data_dim, latent_dim=latent_dim, seed=config['general']['seed'])
 
     def fit(self, data, batch_size=32, epochs=1, **kwargs):
         """
