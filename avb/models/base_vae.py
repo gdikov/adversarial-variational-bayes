@@ -6,7 +6,7 @@ from scipy.stats import norm as standard_gaussian
 from ..utils.config import load_config
 
 config = load_config('global_config.yaml')
-np.random.seed(config['general']['seed'])
+np.random.seed(config['seed'])
 
 
 class BaseVariationalAutoencoder(object):
@@ -125,7 +125,7 @@ class BaseVariationalAutoencoder(object):
             A ndarray of the same shape as the input, representing the reconstructed samples
         """
         latent_samples = self.infer(data, batch_size)
-        reconstructed_samples = self.generate(latent_samples=latent_samples, return_probs=True)
+        reconstructed_samples = self.generate(batch_size=batch_size, latent_samples=latent_samples, return_probs=True)
         return reconstructed_samples
 
     def save(self, dirname, deployable_models_only=False, save_metainfo=False):

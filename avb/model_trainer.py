@@ -26,7 +26,7 @@ class ModelTrainer(object):
         self.model = model
         self.overwrite = overwrite
         self.experiment_name = experiment_name
-        self.model_dirname = os.path.join(config['general']['models_dir'], self.experiment_name)
+        self.model_dirname = os.path.join(config['models_dir'], self.experiment_name)
         self.checkpoint_best = checkpoint_best
 
     def get_model(self):
@@ -46,9 +46,9 @@ class ModelTrainer(object):
         Returns:
             Formatted training start timestamp.
         """
-        if os.path.exists(config['general']['temp_dir']):
-            shutil.rmtree(config['general']['temp_dir'])
-        os.makedirs(config['general']['temp_dir'])
+        if os.path.exists(config['temp_dir']):
+            shutil.rmtree(config['temp_dir'])
+        os.makedirs(config['temp_dir'])
         training_starttime = datetime.now().isoformat()
         return training_starttime
 
@@ -64,18 +64,18 @@ class ModelTrainer(object):
             In-place method.
         """
         if self.overwrite:
-            model_dirname = os.path.join(config['general']['models_dir'], self.experiment_name)
+            model_dirname = os.path.join(config['models_dir'], self.experiment_name)
         else:
-            model_dirname = os.path.join(config['general']['models_dir'],
+            model_dirname = os.path.join(config['models_dir'],
                                          self.experiment_name + '_{}'.format(datetime.now().isoformat()))
         try:
             if not os.path.exists(model_dirname):
                 os.makedirs(model_dirname)
 
-            checkpoints = [fname for fname in os.listdir(config['general']['temp_dir']) if 'interrupted' not in fname]
+            checkpoints = [fname for fname in os.listdir(config['temp_dir']) if 'interrupted' not in fname]
             if self.checkpoint_best:
                 best_checkpoint = checkpoints[asscalar(argmin([float(fname.split('_')[3]) for fname in checkpoints]))]
-                tmp_model_dirname = os.path.join(config['general']['temp_dir'], best_checkpoint)
+                tmp_model_dirname = os.path.join(config['temp_dir'], best_checkpoint)
                 for f in os.listdir(tmp_model_dirname):
                     if f.endswith('.h5'):
                         shutil.move(os.path.join(tmp_model_dirname, f), os.path.join(model_dirname, f))

@@ -1,16 +1,9 @@
 
-general:
-  seed: 7
-  data_dir: data
-  logs_dir: output/logs
-  temp_dir: output/tmp
-  models_dir: output/models
-
-experiment:
-  name: mnist
-  load_pretrained: False
-  model_name: Test            # the name of the pre-trained model, or if load_pretrained is False -- the name of the new model
-  dataset: mnist
+seed: 7
+data_dir: data
+logs_dir: output/logs
+temp_dir: output/tmp
+models_dir: output/models
 
 
 

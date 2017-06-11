@@ -28,7 +28,7 @@ class BaseEncoder(object):
     def sample_standard_normal_noise(self, inputs, **kwargs):
         n_samples = kwargs.get('n_samples', ker.shape(inputs)[0])
         samples_isotropic = ker.random_normal(shape=(n_samples, self.noise_dim),
-                                              mean=0, stddev=1, seed=config['general']['seed'])
+                                              mean=0, stddev=1, seed=config['seed'])
         op_mode = kwargs.get('mode', 'none')
         if op_mode == 'concatenate':
             concat = Concatenate(axis=1, name='enc_noise_concatenation')([inputs, samples_isotropic])

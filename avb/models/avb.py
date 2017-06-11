@@ -11,7 +11,7 @@ from ..models.base_vae import BaseVariationalAutoencoder
 from ..models.freezable import FreezableModel
 
 config = load_config('global_config.yaml')
-np.random.seed(config['general']['seed'])
+np.random.seed(config['seed'])
 
 
 class AdversarialVariationalBayes(BaseVariationalAutoencoder):
@@ -95,7 +95,7 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
         self.models_dict['trainable']['avb_trainable_discriminator'] = self.avb_trainable_discriminator
 
         self.data_iterator = AVBDataIterator(data_dim=data_dim, latent_dim=latent_dim,
-                                             seed=config['general']['seed'])
+                                             seed=config['seed'])
 
     def fit(self, data, batch_size=32, epochs=1, **kwargs):
         """
@@ -137,7 +137,7 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
                 current_epoch_loss = np.mean(epoch_loss_history_encdec) + np.mean(epoch_loss_history_disc)
                 if current_epoch_loss < 0.9 * epoch_loss:
                     epoch_loss = current_epoch_loss
-                    self.save(os.path.join(config['general']['temp_dir'], 'ep_{}_loss_{}'.format(ep, epoch_loss)),
+                    self.save(os.path.join(config['temp_dir'], 'ep_{}_loss_{}'.format(ep, epoch_loss)),
                               deployable_models_only=False)
             history['encoderdecoder_loss'].append(epoch_loss_history_encdec)
             history['discriminator_loss'].append(epoch_loss_history_disc)

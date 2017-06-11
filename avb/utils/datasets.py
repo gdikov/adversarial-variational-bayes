@@ -5,13 +5,13 @@ import struct
 import numpy as np
 import os
 
-from avb.utils import load_config
+from .config import load_config
 
 logger = logging.getLogger(__name__)
 config = load_config("global_config.yaml")
 
-PROJECT_DATA_DIR = config['general']['data_dir']
-np.random.seed(config['general']['seed'])
+PROJECT_DATA_DIR = config['data_dir']
+np.random.seed(config['seed'])
 
 
 def load_mnist(local_data_path=None, one_hot=True, binarised=True):

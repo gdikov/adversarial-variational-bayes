@@ -30,12 +30,12 @@ class BaseDiscriminator(object):
             mu, sigma2 = inputs
             n_samples = kwargs.get('n_samples', ker.shape(mu)[0])
             samples_isotropic = ker.random_normal(shape=(n_samples, self.latent_dim),
-                                                  mean=0, stddev=1, seed=config['general']['seed'])
+                                                  mean=0, stddev=1, seed=config['seed'])
             samples = mu + ker.sqrt(sigma2) * samples_isotropic
             return samples
         else:
             samples_isotropic = ker.random_normal(shape=(ker.shape(inputs)[0], self.latent_dim),
-                                                  mean=0, stddev=1, seed=config['general']['seed'])
+                                                  mean=0, stddev=1, seed=config['seed'])
             return samples_isotropic
 
     def __call__(self, *args, **kwargs):

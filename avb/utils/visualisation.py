@@ -1,8 +1,11 @@
+import logging
 import numpy as np
 import os
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
+logger = logging.getLogger(__name__)
 
 
 def plot_latent_2d(latent_vars, target=None, fig_dirpath=None):
@@ -17,6 +20,7 @@ def plot_latent_2d(latent_vars, target=None, fig_dirpath=None):
     Returns:
 
     """
+    logger.info("Plotting 2D latent space.")
     plt.figure(figsize=(6, 6))
     if target is not None:
         plt.scatter(latent_vars[:, 0], latent_vars[:, 1], c=target)
@@ -42,6 +46,7 @@ def plot_sampled_data(data, fig_dirpath=None):
     Returns:
 
     """
+    logger.info("Plotting sampled data.")
     data_dim = data.shape[1]
     sample_side_size = int(np.sqrt(data_dim))
     data = data.reshape(-1, sample_side_size, sample_side_size)
@@ -72,18 +77,21 @@ def plot_reconstructed_data(data, reconstructed_data, fig_dirpath=None):
     Returns:
 
     """
+    logger.info("Plotting reconstructed data.")
     data_dim = data.shape[1]
     sample_side_size = int(np.sqrt(data_dim))
     reconstructed_data = reconstructed_data.reshape(-1, sample_side_size, sample_side_size)
     data = data.reshape(-1, sample_side_size, sample_side_size)
     data_size = data.shape[0]
-    combined_data_reconstructions = np.concatenate([data, reconstructed_data], axis=1)
-
+    combined_data_reconstructions = np.concatenate([data, reconstructed_data], axis=-1)
+    # add a separating blank line between the reshaped column of image pairs for better visualisation
+    combined_data_reconstructions = np.concatenate([combined_data_reconstructions,
+                                                    np.ones((data_size, sample_side_size, 1))], axis=-1)
     samples_per_fig_side = int(np.sqrt(data_size))
     combined_data_reconstructions = combined_data_reconstructions[:samples_per_fig_side ** 2].reshape(
-        samples_per_fig_side, samples_per_fig_side, sample_side_size, sample_side_size * 2)
+        samples_per_fig_side, samples_per_fig_side, sample_side_size, sample_side_size * 2 + 1)
     combined_data_reconstructions = np.concatenate(np.concatenate(combined_data_reconstructions, axis=1), axis=1)
-    plt.figure(figsize=(samples_per_fig_side, samples_per_fig_side))
+    plt.figure(figsize=(10, 10))
     plt.imshow(combined_data_reconstructions, cmap='Greys_r')
     if fig_dirpath is not None:
         if not os.path.exists(fig_dirpath):
