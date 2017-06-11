@@ -1,5 +1,12 @@
-from third_party.ite.cost import MDKL_HSCE as D_KL
 import numpy as np
+import logging
+logger = logging.getLogger(__name__)
+try:
+    from third_party.ite.cost import MDKL_HSCE as D_KL
+except ImportError:
+    D_KL = None
+    logger.error("Cannot import ITE package (probably) for using a Python 2 interpreter. "
+                 "Using any KL divergence based algorithm will result throw an exception.")
 
 
 class KLDivergenceEstimator(object):
@@ -18,18 +25,31 @@ class KLDivergenceEstimator(object):
         return div_estimate
 
 
-def d_kl_from_samples(posterior_samples, data_samples):
+def kl_divergence(p_samples, q_samples):
     kl_div = KLDivergenceEstimator()
-    kl_div.estimate(posterior_samples, data_samples)
+    div = kl_div.estimate(p_samples, q_samples)
+    return div
 
 
-def d_kl_against_normal_prior(posterior_samples):
-    # to estimate the marginal posterior q(z) = integral q(z|x)p(x) dx = integral q(z,x) dx
-    kl_div = KLDivergenceEstimator(reference_dist='standard_normal')
-    kl_div.estimate(posterior_samples)
+def d_kl_against_diag_normal(samples, normal_mean=np.array([0.]), normal_variance=np.array([1.])):
+    normal_samples = np.random.normal(loc=normal_mean, scale=normal_variance, size=samples.shape)
+    return kl_divergence(samples, normal_samples)
 
 
-def reconstruction_error(true_data, reconstructed_data, ):
-    # measure binary cross-entropy in the case of a Bernoulli decoder and binarized input data.
-    x_entropy = np.mean(np.sum(true_data * np.log(reconstructed_data) +
-                               (1 - true_data) * np.log(1 - reconstructed_data), axis=-1))
+def reconstruction_log_likelihood(true_samples, estimated_params):
+    assert true_samples.shape == estimated_params.shape
+    assert true_samples.ndim == 2, "Provide a 2-dim array with a batch size and sample probabilities axes."
+    log_probs = true_samples * np.log(estimated_params) + (1 - true_samples) * np.log(1 - estimated_params)
+    return np.mean(np.array([log_probs]), axis=1)
+
+
+def reconstruction_error(true_samples, reconstructed_samples_probs):
+    mean_cross_entropy = np.mean(-reconstruction_log_likelihood(true_samples, reconstructed_samples_probs))
+    return mean_cross_entropy
+
+
+def evidence_lower_bound(true_samples, reconstructed_samples, latent_samples):
+    reconstruction_ll = reconstruction_log_likelihood(true_samples, reconstructed_samples)
+    kl_div = d_kl_against_diag_normal(latent_samples)
+    elbo = -kl_div + reconstruction_ll
+    return elbo
