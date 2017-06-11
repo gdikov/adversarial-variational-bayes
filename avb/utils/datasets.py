@@ -1,9 +1,11 @@
 import gzip
-import os
-import struct
-import numpy as np
 import logging
-from utils.config import load_config
+import struct
+
+import numpy as np
+import os
+
+from avb.utils import load_config
 
 logger = logging.getLogger(__name__)
 config = load_config("global_config.yaml")

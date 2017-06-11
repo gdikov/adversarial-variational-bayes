@@ -1,9 +1,9 @@
 import numpy as np
-from scipy.stats import norm as standard_gaussian
 import os
-
 from keras.models import Model, Input, model_from_json
-from utils.config import load_config
+from scipy.stats import norm as standard_gaussian
+
+from ..utils.config import load_config
 
 config = load_config('global_config.yaml')
 np.random.seed(config['general']['seed'])
@@ -77,7 +77,7 @@ class BaseVariationalAutoencoder(object):
         latent_samples = self.inference_model.predict_generator(data_iterator, steps=n_iters)
         return latent_samples
 
-    def generate(self, n_samples, batch_size=32, **kwargs):
+    def generate(self, n_samples=100, batch_size=32, **kwargs):
         """
         Sample new data from the generator network.
 
@@ -85,21 +85,48 @@ class BaseVariationalAutoencoder(object):
             n_samples: int, the number of samples to be generated 
             batch_size: int, number of generated samples are once
 
+        Keyword Args:
+            return_probs: bool, whether the output generations should be raw probabilities or sampled Bernoulli outcomes
+            latent_samples: ndarray, alternative source of latent encoding, otherwise sampling will be applied
+
         Returns:
             The generated data as ndarray of shape (n_samples, data_dim)
         """
         return_probs = kwargs.get('return_probs', True)
-        if not hasattr(self, 'data_iterator'):
-            raise AttributeError("Initialise the data iterator in the child classes first!")
-        n_samples_per_axis = complex(int(np.sqrt(n_samples)))
-        uniform_grid = np.mgrid[0.01:0.99:n_samples_per_axis, 0.01:0.99:n_samples_per_axis].reshape(2, -1).T
-        gaussian_grid = standard_gaussian.ppf(uniform_grid)
-        data_iterator, n_iters = self.data_iterator.iter(gaussian_grid, batch_size=batch_size, mode='generation')
-        data_probs = self.generative_model.predict_generator(data_iterator, steps=n_iters)
+        latent_samples = kwargs.get('latent_samples', None)
+
+        if latent_samples is not None:
+            data_iterator, n_iters = self.data_iterator.iter(latent_samples, batch_size=batch_size, mode='generation')
+            data_probs = self.generative_model.predict_generator(data_iterator, steps=n_iters)
+        else:
+            if self.latent_dim == 2:
+                # perform 2d grid search
+                n_samples_per_axis = complex(int(np.sqrt(n_samples)))
+                uniform_grid = np.mgrid[0.01:0.99:n_samples_per_axis, 0.01:0.99:n_samples_per_axis].reshape(2, -1).T
+                latent_samples = standard_gaussian.ppf(uniform_grid)
+            else:
+                latent_samples = np.random.standard_normal(size=(n_samples, self.latent_dim))
+            data_iterator, n_iters = self.data_iterator.iter(latent_samples, batch_size=batch_size, mode='generation')
+            data_probs = self.generative_model.predict_generator(data_iterator, steps=n_iters)
         if return_probs:
             return data_probs
         sampled_data = np.random.binomial(1, p=data_probs)
         return sampled_data
+
+    def reconstruct(self, data, batch_size=32, **kwargs):
+        """
+        Reconstruct input data from latent encoding. Used mainly for goodness evaluation purposes.
+
+        Args:
+            data: ndarray, input data of shape (N, data_dim) to be encoded and decoded
+            batch_size: int, the number of samples to be computed at one pass
+
+        Returns:
+            A ndarray of the same shape as the input, representing the reconstructed samples
+        """
+        latent_samples = self.infer(data, batch_size)
+        reconstructed_samples = self.generate(latent_samples=latent_samples, return_probs=True)
+        return reconstructed_samples
 
     def save(self, dirname, deployable_models_only=False, save_metainfo=False):
         """

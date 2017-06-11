@@ -1,15 +1,14 @@
 import numpy as np
 import os
+from keras.optimizers import RMSprop
 from tqdm import tqdm
 
-from keras.optimizers import RMSprop
-from ..models.freezable import FreezableModel
-from ..models.base_vae import BaseVariationalAutoencoder
-
-from networks import Encoder, MomentEstimationEncoder, Decoder, Discriminator, AdaptivePriorDiscriminator
+from ..utils.config import load_config
 from losses import AVBDiscriminatorLossLayer, AVBEncoderDecoderLossLayer
+from networks import Encoder, MomentEstimationEncoder, Decoder, Discriminator, AdaptivePriorDiscriminator
 from ..data_iterator import AVBDataIterator
-from utils.config import load_config
+from ..models.base_vae import BaseVariationalAutoencoder
+from ..models.freezable import FreezableModel
 
 config = load_config('global_config.yaml')
 np.random.seed(config['general']['seed'])

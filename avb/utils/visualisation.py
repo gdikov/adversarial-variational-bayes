@@ -1,0 +1,93 @@
+import numpy as np
+import os
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+
+def plot_latent_2d(latent_vars, target=None, fig_dirpath=None):
+    """
+    Plot in 2D samples from the latent space.
+
+    Args:
+        latent_vars: ndarray, the latent samples with shape (N, 2)
+        target: ndarray, the numeric labels used for coloring of the latent samples, shape is (N, 1)
+        fig_dirpath: str, optional path to folder where the figure will be saved and not showed
+
+    Returns:
+
+    """
+    plt.figure(figsize=(6, 6))
+    if target is not None:
+        plt.scatter(latent_vars[:, 0], latent_vars[:, 1], c=target)
+    else:
+        raise NotImplementedError
+    plt.colorbar()
+    if fig_dirpath is not None:
+        if not os.path.exists(fig_dirpath):
+            os.makedirs(fig_dirpath)
+        plt.savefig(os.path.join(fig_dirpath, 'latent_samples.png'))
+    else:
+        plt.show()
+
+
+def plot_sampled_data(data, fig_dirpath=None):
+    """
+    Plot the generated samples in a large square plot of the concatenated generated images.
+
+    Args:
+        data: ndarray, the generated samples with shape (N, data_dim)
+        fig_dirpath: str, optional path to folder where the figure will be saved and not showed
+
+    Returns:
+
+    """
+    data_dim = data.shape[1]
+    sample_side_size = int(np.sqrt(data_dim))
+    data = data.reshape(-1, sample_side_size, sample_side_size)
+    data_size = data.shape[0]
+    samples_per_fig_side = int(np.sqrt(data_size))
+    data = data[:samples_per_fig_side**2].reshape(samples_per_fig_side, samples_per_fig_side,
+                                                  sample_side_size, sample_side_size)
+    data = np.concatenate(np.concatenate(data, axis=1), axis=1)
+    plt.figure(figsize=(10, 10))
+    plt.imshow(data, cmap='Greys_r')
+    if fig_dirpath is not None:
+        if not os.path.exists(fig_dirpath):
+            os.makedirs(fig_dirpath)
+        plt.savefig(os.path.join(fig_dirpath, 'generated_samples.png'))
+    else:
+        plt.show()
+
+
+def plot_reconstructed_data(data, reconstructed_data, fig_dirpath=None):
+    """
+    Plot pairwise data and reconstructed data images in a large plot.
+
+    Args:
+        data: ndarray, original data samples of shape (N, data_dim)
+        reconstructed_data: ndarray, reconstructed data samples of the same shape as data
+        fig_dirpath: str, optional path to folder where the figure will be saved and not showed
+
+    Returns:
+
+    """
+    data_dim = data.shape[1]
+    sample_side_size = int(np.sqrt(data_dim))
+    reconstructed_data = reconstructed_data.reshape(-1, sample_side_size, sample_side_size)
+    data = data.reshape(-1, sample_side_size, sample_side_size)
+    data_size = data.shape[0]
+    combined_data_reconstructions = np.concatenate([data, reconstructed_data], axis=1)
+
+    samples_per_fig_side = int(np.sqrt(data_size))
+    combined_data_reconstructions = combined_data_reconstructions[:samples_per_fig_side ** 2].reshape(
+        samples_per_fig_side, samples_per_fig_side, sample_side_size, sample_side_size * 2)
+    combined_data_reconstructions = np.concatenate(np.concatenate(combined_data_reconstructions, axis=1), axis=1)
+    plt.figure(figsize=(samples_per_fig_side, samples_per_fig_side))
+    plt.imshow(combined_data_reconstructions, cmap='Greys_r')
+    if fig_dirpath is not None:
+        if not os.path.exists(fig_dirpath):
+            os.makedirs(fig_dirpath)
+        plt.savefig(os.path.join(fig_dirpath, 'reconstructed_samples.png'))
+    else:
+        plt.show()

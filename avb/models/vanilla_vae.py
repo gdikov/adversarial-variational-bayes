@@ -1,12 +1,12 @@
-from tqdm import tqdm
-from networks import ReparametrisedGaussianEncoder, Decoder
-from losses import VAELossLayer
-from ..models import BaseVariationalAutoencoder
-
 from keras.models import Model
 from keras.optimizers import RMSprop
+from tqdm import tqdm
+
+from ..utils.config import load_config
+from losses import VAELossLayer
+from networks import ReparametrisedGaussianEncoder, Decoder
 from ..data_iterator import VAEDataIterator
-from utils.config import load_config
+from ..models import BaseVariationalAutoencoder
 
 config = load_config('global_config.yaml')
 

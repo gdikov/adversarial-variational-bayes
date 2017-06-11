@@ -1,11 +1,11 @@
 import logging
-import keras.backend as ker
 
+import keras.backend as ker
 from keras.layers import Lambda
 from keras.models import Model, Input
-from architectures import get_network_by_name
 
-from utils.config import load_config
+from architectures import get_network_by_name
+from ...utils.config import load_config
 
 config = load_config('global_config.yaml')
 logger = logging.getLogger(__name__)

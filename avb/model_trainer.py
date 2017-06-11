@@ -1,11 +1,12 @@
-import os
 import logging
 import shutil
 from datetime import datetime
+
+import os
 from numpy import argmin, savez, asscalar
-from utils.config import load_config
 
 from avb.models import AdversarialVariationalBayes, GaussianVariationalAutoencoder
+from avb.utils.config import load_config
 
 config = load_config('global_config.yaml')
 logger = logging.getLogger(__name__)
