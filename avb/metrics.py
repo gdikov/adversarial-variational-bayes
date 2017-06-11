@@ -1,17 +1,23 @@
 import numpy as np
 import logging
+import sys
+import os
+
 logger = logging.getLogger(__name__)
+sys.path.append(os.path.join(os.getcwd(), 'third_party'))
 try:
     from third_party.ite.cost import MDKL_HSCE as D_KL
 except ImportError:
     D_KL = None
-    logger.error("Cannot import ITE package (probably) for using a Python 2 interpreter. "
-                 "Using any KL divergence based algorithm will result throw an exception.")
+    logger.error("Cannot import ITE package, expected to be found under `third_party/ite`")
+if sys.version_info < (3,):
+    logger.error("KL divergence estimation will fail for it is based on the ITE package which is "
+                 "supported only with a Python 3 interpreter. Detected interpreter is {}".format(sys.version_info))
 
 
 class KLDivergenceEstimator(object):
     def __init__(self, reference_dist='standard_normal'):
-        self.estimator = D_KL.estimation
+        self.estimator = D_KL().estimation
         if reference_dist == 'standard_normal':
             self.ref_distribution = np.random.randn
         else:
@@ -48,8 +54,16 @@ def reconstruction_error(true_samples, reconstructed_samples_probs):
     return mean_cross_entropy
 
 
-def evidence_lower_bound(true_samples, reconstructed_samples, latent_samples):
-    reconstruction_ll = reconstruction_log_likelihood(true_samples, reconstructed_samples)
-    kl_div = d_kl_against_diag_normal(latent_samples)
+def evidence_lower_bound(true_samples, reconstructed_samples, latent_samples, targets=None):
+    data_size = true_samples.shape[0]
+    if targets is None:
+        targets = np.zeros(data_size)
+    groups = np.unique(targets)
+    reconstruction_ll = 0.
+    kl_div = 0.
+    for ids in [targets == g for g in groups]:
+        reconstruction_ll += (1. * np.sum(ids) / data_size) * \
+                             np.mean(reconstruction_log_likelihood(true_samples[ids], reconstructed_samples[ids]))
+        kl_div += (1. * np.sum(ids) / data_size) * d_kl_against_diag_normal(latent_samples[ids])
     elbo = -kl_div + reconstruction_ll
     return elbo
