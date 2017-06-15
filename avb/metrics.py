@@ -62,8 +62,12 @@ def evidence_lower_bound(true_samples, reconstructed_samples, latent_samples, ta
     reconstruction_ll = 0.
     kl_div = 0.
     for ids in [targets == g for g in groups]:
-        reconstruction_ll += (1. * np.sum(ids) / data_size) * \
-                             np.mean(reconstruction_log_likelihood(true_samples[ids], reconstructed_samples[ids]))
-        kl_div += (1. * np.sum(ids) / data_size) * d_kl_against_diag_normal(latent_samples[ids])
-    elbo = -kl_div + reconstruction_ll
+        reconstruction_ll += np.mean(reconstruction_log_likelihood(true_samples[ids], reconstructed_samples[ids]))
+        kl_div += d_kl_against_diag_normal(latent_samples[ids])
+    elbo = (-kl_div + reconstruction_ll) * (1. * np.sum(ids) / data_size)
     return elbo
+
+
+def normality_of_marginal_posterior(latent_samples):
+    kl_marginal_posterior_prior = d_kl_against_diag_normal(latent_samples)
+    return kl_marginal_posterior_prior

@@ -3,7 +3,7 @@
 from scipy.special import psi, gamma
 # from scipy.special import psi, gammaln
 from numpy import floor, sqrt, concatenate, ones, sort, mean, log, absolute,\
-                  exp, pi, sum, max
+                  exp, pi, sum, max, inf
 
 from ite.cost.x_initialization import InitKnnK, InitX, InitKnnKAlpha, \
                                       InitKnnKAlphaBeta, InitKnnSAlpha
@@ -66,6 +66,7 @@ class BHShannon_KnnK(InitKnnK):
         distances_yy = knn_distances(y, y, True, self.knn_method, self.k,
                                      self.eps, 2)[0]
         v = volume_of_the_unit_ball(dim)
+        distances_yy[:, self.k - 1][distances_yy[:, self.k-1] == 0] = 1e-6
         h = log(num_of_samples - 1) - psi(self.k) + log(v) + \
             dim * sum(log(distances_yy[:, self.k-1])) / num_of_samples
 
