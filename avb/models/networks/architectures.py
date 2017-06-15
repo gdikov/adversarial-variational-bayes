@@ -1,4 +1,4 @@
-from keras.layers import Activation, Dense, Conv2DTranspose, Conv2D, Dot, Reshape, LocallyConnected1D
+from keras.layers import Activation, Dense, Conv2DTranspose, Conv2D, Dot, Reshape, LocallyConnected1D, Concatenate
 from keras.models import Model, Input
 
 
@@ -78,12 +78,14 @@ def synthetic_decoder(inputs):
 
 def synthetic_discriminator(data_dim, latent_dim):
     data_input = Input(shape=(data_dim,), name='disc_internal_data_input')
-    discriminator_body_data = repeat_dense(data_input, n_layers=2, n_units=256, name_prefix='disc_body_data')
-
     latent_input = Input(shape=(latent_dim,), name='disc_internal_latent_input')
-    discriminator_body_latent = repeat_dense(latent_input, n_layers=2, n_units=256, name_prefix='disc_body_latent')
 
-    merged_data_latent = Dot(axes=1, name='disc_merge')([discriminator_body_data, discriminator_body_latent])
+    # discriminator_body_data = repeat_dense(data_input, n_layers=2, n_units=256, name_prefix='disc_body_data')
+    # discriminator_body_latent = repeat_dense(latent_input, n_layers=2, n_units=256, name_prefix='disc_body_latent')
+    # merged_data_latent = Dot(axes=1, name='disc_merge')([discriminator_body_data, discriminator_body_latent])
+    concatenated_inputs = Concatenate(axis=-1, name='disc_concatenate_inputs')([data_input, latent_input])
+    merged_data_latent = repeat_dense(concatenated_inputs, n_layers=2, n_units=256, name_prefix='disc_body')
+    
     discriminator_output = Activation(activation='sigmoid', name='disc_output')(merged_data_latent)
     discriminator_model = Model(inputs=[data_input, latent_input], outputs=discriminator_output,
                                 name='disc_internal_model')

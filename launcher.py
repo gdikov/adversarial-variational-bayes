@@ -6,6 +6,12 @@ from avb.model_trainer import AVBModelTrainer, VAEModelTrainer
 from avb.utils.datasets import load_npoints, load_mnist
 from avb.utils.logger import logger
 
+import tensorflow as tf
+from keras.backend.tensorflow_backend import set_session
+config = tf.ConfigProto()
+config.gpu_options.per_process_gpu_memory_fraction = 0.3
+set_session(tf.Session(config=config))
+
 
 def run_synthetic_experiment(model='vae'):
     logger.info("Starting an experiment on the synthetic dataset using {} model".format(model))
@@ -18,7 +24,7 @@ def run_synthetic_experiment(model='vae'):
         trainer = VAEModelTrainer(data_dim=data_dim, latent_dim=2, experiment_name='synthetic', overwrite=True)
     elif model == 'avb':
         trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=2, noise_dim=data_dim, experiment_name='synthetic',
-                                  overwrite=True, use_adaptive_contrast=False)
+                                  overwrite=True, use_adaptive_contrast=False, optimiser_params={'lr': 1e-3})
     else:
         raise ValueError('Unknown model type. Supported models: `vae` and `avb`.')
 
@@ -40,7 +46,7 @@ def run_synthetic_experiment(model='vae'):
 def run_mnist_experiment(model='vae'):
     logger.info("Starting an experiment on the MNIST dataset using {} model".format(model))
     data_dim = 28**2
-    latent_dim = 2
+    latent_dim = 8
     data = load_mnist(binarised=True, one_hot=False)
 
     train_data, train_labels = data['data'], data['target']
@@ -56,7 +62,7 @@ def run_mnist_experiment(model='vae'):
     else:
         raise ValueError('Unknown model type. Supported models: `vae`, `avb` and `avb+ac`.')
 
-    model_dir = trainer.run_training(train_data, batch_size=500, epochs=1)
+    model_dir = trainer.run_training(train_data, batch_size=500, epochs=300)
     trained_model = trainer.get_model()
 
     reconstructions = trained_model.reconstruct(train_data, batch_size=1000)
@@ -73,4 +79,4 @@ def run_mnist_experiment(model='vae'):
 
 
 if __name__ == '__main__':
-    run_synthetic_experiment('vae')
+    run_synthetic_experiment('avb')

@@ -13,7 +13,7 @@ config = load_config('global_config.yaml')
 
 class GaussianVariationalAutoencoder(BaseVariationalAutoencoder):
     def __init__(self, data_dim, latent_dim, resume_from=None, deployable_models_only=False,
-                 experiment_architecture='synthetic'):
+                 experiment_architecture='synthetic', optimiser_params=None):
         """
         Args:
             data_dim: int, flattened data dimensionality 
@@ -21,6 +21,7 @@ class GaussianVariationalAutoencoder(BaseVariationalAutoencoder):
             resume_from: str, optional folder name with pre-trained models 
             deployable_models_only: bool, whether only the inference and generative models should be instantiated
             experiment_architecture: str, network architecture descriptor
+            optimiser_params: dict, optional optimiser parameters
         """
         self.encoder = ReparametrisedGaussianEncoder(data_dim=data_dim, noise_dim=latent_dim, latent_dim=latent_dim,
                                                      network_architecture=experiment_architecture)
@@ -36,8 +37,9 @@ class GaussianVariationalAutoencoder(BaseVariationalAutoencoder):
             posterior_approximation, latent_mean, latent_log_var = self.encoder(self.data_input, is_learning=True)
             reconstruction_log_likelihood = self.decoder([self.data_input, posterior_approximation], is_learning=True)
             vae_loss = VAELossLayer(name='vae_loss')([reconstruction_log_likelihood, latent_mean, latent_log_var])
+            optimiser_params = optimiser_params or {'lr': 1e-3}
             self.vae_model = Model(inputs=self.data_input, outputs=vae_loss)
-            self.vae_model.compile(optimizer=RMSprop(lr=1e-3), loss=None)
+            self.vae_model.compile(optimizer=RMSprop(**optimiser_params), loss=None)
 
         self.models_dict['trainable']['vae_model'] = self.vae_model
         self.data_iterator = VAEDataIterator(data_dim=data_dim, latent_dim=latent_dim, seed=config['seed'])
