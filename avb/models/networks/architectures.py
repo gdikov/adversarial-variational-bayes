@@ -103,9 +103,9 @@ def mnist_moment_estimation_encoder(data_dim, noise_dim, latent_dim=8):
     noise_input = Input(shape=(noise_dim,), name='enc_internal_noise_input')
     # compute the noise basis vectors by attaching small independent fully connected networks to each noise scalar input
     reshaped_noise = Reshape((-1, 1), name='enc_noise_reshape')(noise_input)
-    noise_basis_vectors = LocallyConnected1D(filters=1, kernel_size=1,  # 16
+    noise_basis_vectors = LocallyConnected1D(filters=16, kernel_size=1,
                                              strides=1, activation='relu', name='enc_noise_f_0')(reshaped_noise)
-    noise_basis_vectors = LocallyConnected1D(filters=1, kernel_size=1,  # 32
+    noise_basis_vectors = LocallyConnected1D(filters=32, kernel_size=1,
                                              strides=1, activation='relu', name='enc_noise_f_1')(noise_basis_vectors)
     noise_basis_vectors = LocallyConnected1D(filters=latent_dim, kernel_size=1,
                                              strides=1, activation='relu', name='enc_noise_f_2')(noise_basis_vectors)
@@ -117,8 +117,8 @@ def mnist_moment_estimation_encoder(data_dim, noise_dim, latent_dim=8):
     assert data_dim == 28 ** 2, "MNIST data should be flattened to a 784-dimensional vectors."
     # compute the data embedding using deep convolutional neural network and reshape the output to the noise dim.
     convnet_input = Reshape((28, 28, 1), name='enc_data_reshape')(data_input)
-    coefficients = deflating_convolution(convnet_input, n_deflation_layers=1,
-                                         n_filters_init=4, name_prefix='enc_data_body')
+    coefficients = deflating_convolution(convnet_input, n_deflation_layers=3,
+                                         n_filters_init=32, name_prefix='enc_data_body')
     coefficients = Reshape((-1,), name='enc_data_features_reshape')(coefficients)
     coefficients = Dense(noise_dim * latent_dim, name='enc_coefficients')(coefficients)
     coefficients = Reshape((noise_dim, latent_dim), name='enc_coefficients_reshape')(coefficients)
@@ -130,7 +130,7 @@ def mnist_moment_estimation_encoder(data_dim, noise_dim, latent_dim=8):
 
 def mnist_decoder(inputs):
     # use transposed convolutions to inflate the latent space to (?, 32, 32, 64)
-    decoder_body = inflating_convolution(inputs, 2, projection_space_shape=(2, 2, 128), name_prefix='dec_body')
+    decoder_body = inflating_convolution(inputs, 3, projection_space_shape=(4, 4, 512), name_prefix='dec_body')
     # use single non-padded convolution to shrink the size to (?, 28, 28, 1)
     decoder_body = Conv2D(filters=1, kernel_size=(5, 5), strides=(1, 1), activation='relu',
                           padding='valid', name='dec_body_conv')(decoder_body)

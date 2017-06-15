@@ -60,7 +60,7 @@ def plot_sampled_data(data, fig_dirpath=None):
     if fig_dirpath is not None:
         if not os.path.exists(fig_dirpath):
             os.makedirs(fig_dirpath)
-        plt.savefig(os.path.join(fig_dirpath, 'generated_samples.png'))
+        plt.savefig(os.path.join(fig_dirpath, 'reconstructed_samples.png'))
     else:
         plt.show()
 
