@@ -54,6 +54,11 @@ def reconstruction_error(true_samples, reconstructed_samples_probs):
     return mean_cross_entropy
 
 
+def data_log_likelihood(generated_samples):
+    dll = np.log(np.mean(np.mean(generated_samples, axis=0)))
+    return dll
+
+
 def evidence_lower_bound(true_samples, reconstructed_samples, latent_samples, targets=None):
     data_size = true_samples.shape[0]
     if targets is None:
