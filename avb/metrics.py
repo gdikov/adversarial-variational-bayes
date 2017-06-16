@@ -5,6 +5,8 @@ import os
 
 logger = logging.getLogger(__name__)
 sys.path.append(os.path.join(os.getcwd(), 'third_party'))
+np.random.seed(7)
+
 try:
     from third_party.ite.cost import MDKL_HSCE as D_KL
 except ImportError:
@@ -46,30 +48,34 @@ def reconstruction_log_likelihood(true_samples, estimated_params):
     assert true_samples.shape == estimated_params.shape
     assert true_samples.ndim == 2, "Provide a 2-dim array with a batch size and sample probabilities axes."
     log_probs = true_samples * np.log(estimated_params) + (1 - true_samples) * np.log(1 - estimated_params)
-    return np.mean(np.array([log_probs]), axis=1)
+    log_probs = np.sum(log_probs, axis=1)
+    return log_probs
 
 
 def reconstruction_error(true_samples, reconstructed_samples_probs):
+    sampling_size = reconstructed_samples_probs.shape[0] // true_samples.shape[0]
+    true_samples = np.repeat(true_samples, sampling_size, axis=0)
     mean_cross_entropy = np.mean(-reconstruction_log_likelihood(true_samples, reconstructed_samples_probs))
     return mean_cross_entropy
 
 
 def data_log_likelihood(generated_samples):
-    dll = np.log(np.mean(np.mean(generated_samples, axis=0)))
-    return dll
+    return 0.
 
 
-def evidence_lower_bound(true_samples, reconstructed_samples, latent_samples, targets=None):
-    data_size = true_samples.shape[0]
-    if targets is None:
-        targets = np.zeros(data_size)
-    groups = np.unique(targets)
+def evidence_lower_bound(true_samples, reconstructed_samples, latent_samples):
+    effective_data_size = true_samples.shape[0]
+    samples_size = reconstructed_samples.shape[0]
+    sampling_size = samples_size // effective_data_size
     reconstruction_ll = 0.
     kl_div = 0.
-    for ids in [targets == g for g in groups]:
-        reconstruction_ll += np.mean(reconstruction_log_likelihood(true_samples[ids], reconstructed_samples[ids]))
-        kl_div += d_kl_against_diag_normal(latent_samples[ids])
-    elbo = (-kl_div + reconstruction_ll) * (1. * np.sum(ids) / data_size)
+    for i, true_sample in enumerate(true_samples):
+        true_sample = np.repeat(true_sample[None, :], sampling_size, axis=0)
+        reconstruction_ll += np.mean(reconstruction_log_likelihood(
+            true_sample, reconstructed_samples[i*sampling_size:(i+1)*sampling_size]))
+        kl_div += d_kl_against_diag_normal(latent_samples[i*sampling_size:(i+1)*sampling_size])
+
+    elbo = (-kl_div + reconstruction_ll) / effective_data_size
     return elbo
 
 

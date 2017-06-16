@@ -5,17 +5,18 @@ from avb.utils.datasets import load_npoints, load_mnist
 
 
 if __name__ == '__main__':
-    model_dir = "output/models/synthetic"
+    model_dir = "output/models/mnist"
     latent_samples = load_array(path_join(model_dir, 'latent_samples.npy'))
     reconstructed_samples = load_array(path_join(model_dir, 'reconstructed_samples.npy'))
     generated_samples = load_array(path_join(model_dir, 'generated_samples.npy'))
-    # data = load_mnist(binarised=True, one_hot=False)
-    data = load_npoints(4)
-    true_samples, targets = data['data'], data['target']
+    data = load_mnist(binarised=True, one_hot=False)
+    # data = load_npoints(4)
+    test_data_size = 100
+    true_samples = data['data'][-test_data_size:]
+
     elbo = evidence_lower_bound(true_samples=true_samples,
                                 reconstructed_samples=reconstructed_samples,
-                                latent_samples=latent_samples,
-                                targets=targets)
+                                latent_samples=latent_samples)
     print("Estimated ELBO = {}".format(elbo))
     kl_marginal_prior = normality_of_marginal_posterior(latent_samples)
     print("KL(q(z) || p(z)) = {}".format(kl_marginal_prior))
