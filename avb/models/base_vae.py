@@ -68,11 +68,16 @@ class BaseVariationalAutoencoder(object):
             data: ndarray, data array of shape (N, data_dim) 
             batch_size: int, the number of samples to be inferred at once
 
+        Keyword Args:
+            sampling_size: int, the number of noisy samples which will be inferred for a single data input sample
+
         Returns:
             The inferred latent factors as ndarray of shape (N, latent_dim) 
         """
         if not hasattr(self, 'data_iterator'):
             raise AttributeError("Initialise the data iterator in the child classes first!")
+        sampling_size = kwargs.get('sampling_size', 1)
+        data = np.repeat(data, sampling_size, axis=0)
         data_iterator, n_iters = self.data_iterator.iter(data, batch_size, mode='inference')
         latent_samples = self.inference_model.predict_generator(data_iterator, steps=n_iters)
         return latent_samples
@@ -121,10 +126,14 @@ class BaseVariationalAutoencoder(object):
             data: ndarray, input data of shape (N, data_dim) to be encoded and decoded
             batch_size: int, the number of samples to be computed at one pass
 
+        Keyword Args:
+            sampling_size: int, the number of noisy samples which will be reconstructed for a single data input sample
+
         Returns:
             A ndarray of the same shape as the input, representing the reconstructed samples
         """
-        latent_samples = self.infer(data, batch_size)
+        sampling_size = kwargs.get('sampling_size', 1)
+        latent_samples = self.infer(data, batch_size, sampling_size=sampling_size)
         reconstructed_samples = self.generate(batch_size=batch_size, latent_samples=latent_samples, return_probs=True)
         return reconstructed_samples
 

@@ -80,11 +80,11 @@ def synthetic_discriminator(data_dim, latent_dim):
     data_input = Input(shape=(data_dim,), name='disc_internal_data_input')
     latent_input = Input(shape=(latent_dim,), name='disc_internal_latent_input')
 
-    # discriminator_body_data = repeat_dense(data_input, n_layers=2, n_units=256, name_prefix='disc_body_data')
-    # discriminator_body_latent = repeat_dense(latent_input, n_layers=2, n_units=256, name_prefix='disc_body_latent')
-    # merged_data_latent = Dot(axes=1, name='disc_merge')([discriminator_body_data, discriminator_body_latent])
-    concatenated_inputs = Concatenate(axis=-1, name='disc_concatenate_inputs')([data_input, latent_input])
-    merged_data_latent = repeat_dense(concatenated_inputs, n_layers=2, n_units=256, name_prefix='disc_body')
+    discriminator_body_data = repeat_dense(data_input, n_layers=2, n_units=256, name_prefix='disc_body_data')
+    discriminator_body_latent = repeat_dense(latent_input, n_layers=2, n_units=256, name_prefix='disc_body_latent')
+    merged_data_latent = Dot(axes=1, name='disc_merge')([discriminator_body_data, discriminator_body_latent])
+    # concatenated_inputs = Concatenate(axis=-1, name='disc_concatenate_inputs')([data_input, latent_input])
+    # merged_data_latent = repeat_dense(concatenated_inputs, n_layers=2, n_units=256, name_prefix='disc_body')
     
     discriminator_output = Activation(activation='sigmoid', name='disc_output')(merged_data_latent)
     discriminator_model = Model(inputs=[data_input, latent_input], outputs=discriminator_output,
@@ -96,9 +96,25 @@ def synthetic_discriminator(data_dim, latent_dim):
 
 
 def mnist_encoder(inputs, latent_dim=8):
-    encoder_body = repeat_dense(inputs, n_layers=4, n_units=512, name_prefix='enc_body')
-    latent_factors = Dense(latent_dim, activation=None, name='enc_latent')(encoder_body)
+    convnet_input = Reshape((28, 28, 1), name='enc_data_reshape')(inputs)
+    conv_output = deflating_convolution(convnet_input, n_deflation_layers=3,
+                                        n_filters_init=20, name_prefix='enc_data_body')
+    conv_output = Reshape((-1,), name='enc_data_features_reshape')(conv_output)
+    conv_output = Dense(latent_dim, name='enc_latent_features')(conv_output)
+    latent_factors = Model(inputs=inputs, outputs=conv_output, name='enc_internal_model')
+
     return latent_factors
+
+
+def mnist_reparametrized_encoder(inputs, latent_dim):
+    convnet_input = Reshape((28, 28, 1), name='rep_enc_data_reshape')(inputs)
+    conv_output = deflating_convolution(convnet_input, n_deflation_layers=3,
+                                        n_filters_init=20, name_prefix='rep_enc_data_body')
+    latent_factors = Reshape((-1,), name='rep_enc_data_features_reshape')(conv_output)
+    latent_mean = Dense(latent_dim, activation=None, name='rep_enc_mean')(latent_factors)
+    # since the variance must be positive and this is not easy to restrict, interpret it in the log domain
+    latent_log_var = Dense(latent_dim, activation=None, name='rep_enc_var')(latent_factors)
+    return latent_mean, latent_log_var
 
 
 def mnist_moment_estimation_encoder(data_dim, noise_dim, latent_dim=8):
@@ -120,7 +136,7 @@ def mnist_moment_estimation_encoder(data_dim, noise_dim, latent_dim=8):
     # compute the data embedding using deep convolutional neural network and reshape the output to the noise dim.
     convnet_input = Reshape((28, 28, 1), name='enc_data_reshape')(data_input)
     coefficients = deflating_convolution(convnet_input, n_deflation_layers=3,
-                                         n_filters_init=32, name_prefix='enc_data_body')
+                                         n_filters_init=20, name_prefix='enc_data_body')
     coefficients = Reshape((-1,), name='enc_data_features_reshape')(coefficients)
     coefficients = Dense(noise_dim * latent_dim, name='enc_coefficients')(coefficients)
     coefficients = Reshape((noise_dim, latent_dim), name='enc_coefficients_reshape')(coefficients)
@@ -132,7 +148,7 @@ def mnist_moment_estimation_encoder(data_dim, noise_dim, latent_dim=8):
 
 def mnist_decoder(inputs):
     # use transposed convolutions to inflate the latent space to (?, 32, 32, 64)
-    decoder_body = inflating_convolution(inputs, 3, projection_space_shape=(4, 4, 512), name_prefix='dec_body')
+    decoder_body = inflating_convolution(inputs, 3, projection_space_shape=(4, 4, 128), name_prefix='dec_body')
     # use single non-padded convolution to shrink the size to (?, 28, 28, 1)
     decoder_body = Conv2D(filters=1, kernel_size=(5, 5), strides=(1, 1), activation='relu',
                           padding='valid', name='dec_body_conv')(decoder_body)
@@ -157,7 +173,8 @@ def mnist_discriminator(data_dim, latent_dim):
 
 get_network_by_name = {'encoder': {'synthetic': synthetic_encoder,
                                    'mnist': mnist_encoder},
-                       'reparametrised_encoder': {'synthetic': synthetic_reparametrized_encoder},
+                       'reparametrised_encoder': {'synthetic': synthetic_reparametrized_encoder,
+                                                  'mnist': mnist_reparametrized_encoder},
                        'moment_estimation_encoder': {'mnist': mnist_moment_estimation_encoder},
                        'decoder': {'synthetic': synthetic_decoder,
                                    'mnist': mnist_decoder},
