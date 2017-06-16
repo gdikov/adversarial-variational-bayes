@@ -29,14 +29,14 @@ def repeat_dense(inputs, n_layers, n_units=256, activation='relu', name_prefix=N
     return h
 
 
-def inflating_convolution(inputs, n_inflation_layers, projection_space_shape=(4, 4, 1024), name_prefix=None):
+def inflating_convolution(inputs, n_inflation_layers, projection_space_shape=(4, 4, 32), name_prefix=None):
     assert len(projection_space_shape) == 3, \
         "Projection space shape is {} but should be 3.".format(len(projection_space_shape))
     flattened_space_dim = reduce(lambda x, y: x*y, projection_space_shape)
     projection = Dense(flattened_space_dim, activation=None, name=name_prefix + '_projection')(inputs)
     reshape = Reshape(projection_space_shape, name=name_prefix + '_reshape')(projection)
     depth = projection_space_shape[2]
-    inflated = Conv2DTranspose(filters=depth // 2, kernel_size=(5, 5), strides=(2, 2), activation='relu',
+    inflated = Conv2DTranspose(filters=min(32, depth // 2), kernel_size=(5, 5), strides=(2, 2), activation='relu',
                                padding='same', name=name_prefix + '_transposed_conv_0')(reshape)
     for i in xrange(1, n_inflation_layers):
         inflated = Conv2DTranspose(filters=depth // max(1, 2**(i+1)), kernel_size=(5, 5),
@@ -147,8 +147,9 @@ def mnist_moment_estimation_encoder(data_dim, noise_dim, latent_dim=8):
 
 
 def mnist_decoder(inputs):
-    # use transposed convolutions to inflate the latent space to (?, 32, 32, 64)
-    decoder_body = inflating_convolution(inputs, 3, projection_space_shape=(4, 4, 128), name_prefix='dec_body')
+    decoder_body = Dense(300, activation='relu')(inputs)
+    # use transposed convolutions to inflate the latent space to (?, 32, 32, 8)
+    decoder_body = inflating_convolution(inputs, 3, projection_space_shape=(4, 4, 32), name_prefix='dec_body')
     # use single non-padded convolution to shrink the size to (?, 28, 28, 1)
     decoder_body = Conv2D(filters=1, kernel_size=(5, 5), strides=(1, 1), activation='relu',
                           padding='valid', name='dec_body_conv')(decoder_body)

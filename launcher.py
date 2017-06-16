@@ -6,11 +6,11 @@ from avb.model_trainer import AVBModelTrainer, VAEModelTrainer
 from avb.utils.datasets import load_npoints, load_mnist
 from avb.utils.logger import logger
 
-import tensorflow as tf
-from keras.backend.tensorflow_backend import set_session
-config = tf.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = 0.3
-set_session(tf.Session(config=config))
+# import tensorflow as tf
+# from keras.backend.tensorflow_backend import set_session
+# config = tf.ConfigProto()
+# config.gpu_options.per_process_gpu_memory_fraction = 0.9
+# set_session(tf.Session(config=config))
 
 
 def run_synthetic_experiment(model='vae'):
@@ -24,7 +24,7 @@ def run_synthetic_experiment(model='vae'):
         trainer = VAEModelTrainer(data_dim=data_dim, latent_dim=2, experiment_name='synthetic', overwrite=True)
     elif model == 'avb':
         trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=2, noise_dim=data_dim, experiment_name='synthetic',
-                                  overwrite=True, use_adaptive_contrast=False, optimiser_params={'lr': 1e-3})
+                                  overwrite=True, use_adaptive_contrast=False, optimiser_params={'lr': 0.0008})
     else:
         raise ValueError('Unknown model type. Supported models: `vae` and `avb`.')
 
@@ -48,8 +48,9 @@ def run_mnist_experiment(model='vae'):
     data_dim = 28**2
     latent_dim = 8
     data = load_mnist(binarised=True, one_hot=False)
-
-    train_data, train_labels = data['data'], data['target']
+    test_data_size = 100
+    train_data, train_labels = data['data'][:-test_data_size], data['target'][:-test_data_size]
+    test_data, test_labels = data['data'][-test_data_size:], data['target'][-test_data_size:]
 
     if model == 'vae':
         trainer = VAEModelTrainer(data_dim=data_dim, latent_dim=latent_dim, experiment_name='mnist', overwrite=True)
@@ -62,16 +63,23 @@ def run_mnist_experiment(model='vae'):
     else:
         raise ValueError('Unknown model type. Supported models: `vae`, `avb` and `avb+ac`.')
 
-    model_dir = trainer.run_training(train_data, batch_size=500, epochs=300)
+    model_dir = trainer.run_training(train_data, batch_size=500, epochs=100)
     trained_model = trainer.get_model()
 
-    reconstructions = trained_model.reconstruct(train_data, batch_size=1000)
+    sampling_size = 100
+    reconstructions = trained_model.reconstruct(test_data,
+                                                batch_size=min(1000, test_data_size),
+                                                sampling_size=sampling_size)
     save_array(path_join(model_dir, 'reconstructed_samples.npy'), reconstructions)
-    plot_reconstructed_data(train_data[:100], reconstructions[:100], fig_dirpath=model_dir)
-    latent_vars = trained_model.infer(train_data, batch_size=1000)
+    plot_reconstructed_data(test_data, reconstructions[::sampling_size], fig_dirpath=model_dir)
+
+    latent_vars = trained_model.infer(test_data,
+                                      batch_size=min(1000, test_data_size),
+                                      sampling_size=sampling_size)
     save_array(path_join(model_dir, 'latent_samples.npy'), latent_vars)
     if latent_dim == 2:
         plot_latent_2d(latent_vars, train_labels, fig_dirpath=model_dir)
+
     generations = trained_model.generate(n_samples=100, batch_size=100)
     save_array(path_join(model_dir, 'generated_samples.npy'), generations)
     plot_sampled_data(generations, fig_dirpath=model_dir)
@@ -79,4 +87,4 @@ def run_mnist_experiment(model='vae'):
 
 
 if __name__ == '__main__':
-    run_synthetic_experiment('avb')
+    run_mnist_experiment('vae')
