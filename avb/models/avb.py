@@ -1,11 +1,11 @@
 import numpy as np
 import os
-from keras.optimizers import RMSprop
+from keras.optimizers import Adam
 from tqdm import tqdm
 
 from ..utils.config import load_config
 from losses import AVBDiscriminatorLossLayer, AVBEncoderDecoderLossLayer
-from networks import Encoder, MomentEstimationEncoder, Decoder, Discriminator, AdaptivePriorDiscriminator
+from networks import StandardEncoder, MomentEstimationEncoder, Decoder, Discriminator, AdaptivePriorDiscriminator
 from ..data_iterator import AVBDataIterator
 from ..models.base_vae import BaseVariationalAutoencoder
 from ..models.freezable import FreezableModel
@@ -49,8 +49,8 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
             self.discriminator = AdaptivePriorDiscriminator(data_dim=data_dim, latent_dim=latent_dim,
                                                             network_architecture=experiment_architecture)
         else:
-            self.encoder = Encoder(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
-                                   network_architecture=experiment_architecture)
+            self.encoder = StandardEncoder(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
+                                           network_architecture=experiment_architecture)
             self.discriminator = Discriminator(data_dim=data_dim, latent_dim=latent_dim,
                                                network_architecture=experiment_architecture)
         self.decoder = Decoder(latent_dim=latent_dim, data_dim=data_dim,
@@ -88,11 +88,11 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
             optimiser_params = optimiser_params or {'lr': 1e-3}
             self.avb_trainable_discriminator.freeze()
             self.avb_trainable_encoder_decoder.unfreeze()
-            self.avb_trainable_encoder_decoder.compile(optimizer=RMSprop(**optimiser_params), loss=None)
+            self.avb_trainable_encoder_decoder.compile(optimizer=Adam(**optimiser_params), loss=None)
 
             self.avb_trainable_discriminator.unfreeze()
             self.avb_trainable_encoder_decoder.freeze()
-            self.avb_trainable_discriminator.compile(optimizer=RMSprop(**optimiser_params), loss=None)
+            self.avb_trainable_discriminator.compile(optimizer=Adam(**optimiser_params), loss=None)
 
         self.models_dict['trainable']['avb_trainable_encoder_decoder'] = self.avb_trainable_encoder_decoder
         self.models_dict['trainable']['avb_trainable_discriminator'] = self.avb_trainable_discriminator

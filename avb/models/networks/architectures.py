@@ -1,5 +1,7 @@
-from keras.layers import Activation, Dense, Conv2DTranspose, Conv2D, Dot, Reshape, LocallyConnected1D, Concatenate
+from keras.layers import Activation, Dense, Conv2DTranspose, Conv2D, Dot, Reshape, \
+    LocallyConnected1D, Concatenate, Add, Lambda
 from keras.models import Model, Input
+from keras.backend import int_shape
 
 
 def repeat_dense(inputs, n_layers, n_units=256, activation='relu', name_prefix=None):
@@ -45,12 +47,27 @@ def inflating_convolution(inputs, n_inflation_layers, projection_space_shape=(4,
     return inflated
 
 
-def deflating_convolution(inputs, n_deflation_layers, n_filters_init=32, name_prefix=None):
+def deflating_convolution(inputs, n_deflation_layers, n_filters_init=32, noise=None, name_prefix=None):
+    def add_linear_noise(x, eps, ind):
+        flattened_deflated = Reshape((-1,), name=name_prefix + '_conv_flatten_{}'.format(ind))(x)
+        deflated_shape = int_shape(x)
+        deflated_size = deflated_shape[1] * deflated_shape[2] * deflated_shape[3]
+        noise_transformed = Dense(deflated_size, activation=None,
+                                  name=name_prefix + '_conv_noise_dense_{}'.format(ind))(eps)
+        added_noise = Add(name=name_prefix + '_conv_add_noise_{}'.format(ind))([noise_transformed, flattened_deflated])
+        x = Reshape((deflated_shape[1], deflated_shape[2], deflated_shape[3]),
+                    name=name_prefix + '_conv_backreshape_{}'.format(ind))(added_noise)
+        return x
+
     deflated = Conv2D(filters=n_filters_init, kernel_size=(5, 5), strides=(2, 2),
                       padding='same', activation='relu', name=name_prefix + '_conv_0')(inputs)
+    if noise is not None:
+        deflated = add_linear_noise(deflated, noise, 0)
     for i in xrange(1, n_deflation_layers):
         deflated = Conv2D(filters=n_filters_init * (2**i), kernel_size=(5, 5), strides=(2, 2),
                           padding='same', activation='relu', name=name_prefix + '_conv_{}'.format(i))(deflated)
+        if noise is not None:
+            deflated = add_linear_noise(deflated, noise, i)
     return deflated
 
 
@@ -58,7 +75,9 @@ def deflating_convolution(inputs, n_deflation_layers, n_filters_init=32, name_pr
 
 
 def synthetic_encoder(inputs, latent_dim):
-    encoder_body = repeat_dense(inputs, n_layers=2, n_units=256, name_prefix='enc_body')
+    data_input, noise_input = inputs
+    data_noise_concat = Concatenate(axis=1, name='enc_data_noise_concatenation')([data_input, noise_input])
+    encoder_body = repeat_dense(data_noise_concat, n_layers=2, n_units=256, name_prefix='enc_body')
     latent_factors = Dense(latent_dim, activation=None, name='enc_latent')(encoder_body)
     return latent_factors
 
@@ -95,13 +114,19 @@ def synthetic_discriminator(data_dim, latent_dim):
 """ Architectures for reproducing paper experiments on the MNIST dataset. """
 
 
-def mnist_encoder(inputs, latent_dim=8):
-    convnet_input = Reshape((28, 28, 1), name='enc_data_reshape')(inputs)
+def mnist_encoder(data_dim, noise_dim, latent_dim=8):
+    data_input = Input(shape=(data_dim,), name='enc_internal_data_input')
+    noise_input = Input(shape=(noise_dim,), name='enc_internal_noise_input')
+    # center the input around 0
+    centered_data = Lambda(lambda x: 2 * x - 1, name='enc_centering_data_input')(data_input)
+    convnet_input = Reshape((28, 28, 1), name='enc_data_reshape')(centered_data)
     conv_output = deflating_convolution(convnet_input, n_deflation_layers=3,
-                                        n_filters_init=20, name_prefix='enc_data_body')
+                                        n_filters_init=64, noise=noise_input,
+                                        name_prefix='enc_data_body')
     conv_output = Reshape((-1,), name='enc_data_features_reshape')(conv_output)
+    conv_output = Dense(800, activation='relu', name='enc_dense_before_latent')(conv_output)
     conv_output = Dense(latent_dim, name='enc_latent_features')(conv_output)
-    latent_factors = Model(inputs=inputs, outputs=conv_output, name='enc_internal_model')
+    latent_factors = Model(inputs=[data_input, noise_input], outputs=conv_output, name='enc_internal_model')
 
     return latent_factors
 
@@ -147,9 +172,9 @@ def mnist_moment_estimation_encoder(data_dim, noise_dim, latent_dim=8):
 
 
 def mnist_decoder(inputs):
-    decoder_body = Dense(300, activation='relu')(inputs)
+    decoder_body = Dense(300, activation='relu', name='dec_body_initial_dense')(inputs)
     # use transposed convolutions to inflate the latent space to (?, 32, 32, 8)
-    decoder_body = inflating_convolution(inputs, 3, projection_space_shape=(4, 4, 32), name_prefix='dec_body')
+    decoder_body = inflating_convolution(decoder_body, 3, projection_space_shape=(4, 4, 32), name_prefix='dec_body')
     # use single non-padded convolution to shrink the size to (?, 28, 28, 1)
     decoder_body = Conv2D(filters=1, kernel_size=(5, 5), strides=(1, 1), activation='relu',
                           padding='valid', name='dec_body_conv')(decoder_body)
@@ -160,7 +185,9 @@ def mnist_decoder(inputs):
 
 def mnist_discriminator(data_dim, latent_dim):
     data_input = Input(shape=(data_dim,), name='disc_internal_data_input')
-    discriminator_body_data = repeat_dense(data_input, n_layers=4, n_units=512, name_prefix='disc_body_data')
+    # center the data around 0 in [-1, 1] as it is in [0, 1].
+    centered_data = Lambda(lambda x: 2 * x - 1, name='disc_centering_data_input')(data_input)
+    discriminator_body_data = repeat_dense(centered_data, n_layers=4, n_units=512, name_prefix='disc_body_data')
 
     latent_input = Input(shape=(latent_dim,), name='disc_internal_latent_input')
     discriminator_body_latent = repeat_dense(latent_input, n_layers=4, n_units=512, name_prefix='disc_body_latent')

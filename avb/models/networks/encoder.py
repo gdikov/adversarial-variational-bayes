@@ -1,7 +1,7 @@
 import logging
 
 import keras.backend as ker
-from keras.layers import Lambda, Concatenate, Multiply
+from keras.layers import Lambda, Concatenate, Multiply, Add, Dense
 from keras.models import Input
 from keras.models import Model
 
@@ -33,13 +33,17 @@ class BaseEncoder(object):
         if op_mode == 'concatenate':
             concat = Concatenate(axis=1, name='enc_noise_concatenation')([inputs, samples_isotropic])
             return concat
+        elif op_mode == 'add':
+            resized_noise = Dense(self.data_dim, activation=None, name='enc_resized_noise_sampler')(samples_isotropic)
+            added_noise_data = Add(name='enc_adding_noise_data')([inputs, resized_noise])
+            return added_noise_data
         return samples_isotropic
 
     def __call__(self, *args, **kwargs):
         return None
 
 
-class Encoder(BaseEncoder):
+class StandardEncoder(BaseEncoder):
     """
     An Encoder model is trained to parametrise an arbitrary posterior approximate distribution given some 
     input x, i.e. q(z|x). The model takes as input concatenated data samples and arbitrary noise and produces
@@ -66,12 +70,13 @@ class Encoder(BaseEncoder):
             latent_dim: int, flattened latent space dimensionality
             network_architecture: str, the architecture name for the body of the Encoder model
         """
-        super(Encoder, self).__init__(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
-                                      network_architecture=network_architecture, name='Standard Encoder')
+        super(StandardEncoder, self).__init__(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
+                                              network_architecture=network_architecture, name='Standard Encoder')
 
-        self.standard_normal_sampler.arguments = {'mode': 'concatenate'}
-        data_noise_concat = self.standard_normal_sampler(self.data_input)
-        latent_factors = get_network_by_name['encoder'][network_architecture](data_noise_concat, latent_dim)
+        # self.standard_normal_sampler.arguments = {'mode': 'add'}
+        noise_input = self.standard_normal_sampler(self.data_input)
+        encoder_body_model = get_network_by_name['encoder'][network_architecture](data_dim, noise_dim, latent_dim)
+        latent_factors = encoder_body_model([self.data_input, noise_input])
         self.encoder_model = Model(inputs=self.data_input, outputs=latent_factors, name='encoder')
 
     def __call__(self, *args, **kwargs):

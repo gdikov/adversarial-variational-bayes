@@ -56,14 +56,16 @@ def run_mnist_experiment(model='vae'):
         trainer = VAEModelTrainer(data_dim=data_dim, latent_dim=latent_dim, experiment_name='mnist', overwrite=True)
     elif model == 'avb':
         trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=latent_dim, noise_dim=data_dim / 28,
-                                  experiment_name='mnist', overwrite=True, use_adaptive_contrast=False)
+                                  experiment_name='mnist', overwrite=True, use_adaptive_contrast=False,
+                                  optimiser_params={'lr': 1e-4, 'beta_1': 0.5})
     elif model == 'avb+ac':
         trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=latent_dim, noise_dim=data_dim / 28,
-                                  experiment_name='mnist', overwrite=True, use_adaptive_contrast=True)
+                                  experiment_name='mnist', overwrite=True, use_adaptive_contrast=True,
+                                  optimiser_params={'lr': 1e-4, 'beta_1': 0.5})
     else:
         raise ValueError('Unknown model type. Supported models: `vae`, `avb` and `avb+ac`.')
 
-    model_dir = trainer.run_training(train_data, batch_size=500, epochs=100)
+    model_dir = trainer.run_training(train_data, batch_size=500, epochs=10)
     trained_model = trainer.get_model()
 
     sampling_size = 100
@@ -87,4 +89,4 @@ def run_mnist_experiment(model='vae'):
 
 
 if __name__ == '__main__':
-    run_mnist_experiment('vae')
+    run_mnist_experiment('avb+ac')
