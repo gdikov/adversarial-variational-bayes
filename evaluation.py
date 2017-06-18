@@ -5,14 +5,22 @@ from avb.utils.datasets import load_npoints, load_mnist
 
 
 if __name__ == '__main__':
-    model_dir = "output/models/mnist"
+    experiment = 'synthetic'
+    if experiment == 'mnist':
+        model_dir = "output/models/mnist"
+        data = load_mnist(binarised=True, one_hot=False)
+        test_data_size = 100
+        true_samples = data['data'][-test_data_size:]
+    elif experiment == 'synthetic':
+        model_dir = "output/models/synthetic"
+        data = load_npoints(4)
+        test_data_size = 5
+        true_samples = data['data']
+    else:
+        raise ValueError('Unknown experiment')
     latent_samples = load_array(path_join(model_dir, 'latent_samples.npy'))
     reconstructed_samples = load_array(path_join(model_dir, 'reconstructed_samples.npy'))
     generated_samples = load_array(path_join(model_dir, 'generated_samples.npy'))
-    data = load_mnist(binarised=True, one_hot=False)
-    # data = load_npoints(4)
-    test_data_size = 100
-    true_samples = data['data'][-test_data_size:]
 
     elbo = evidence_lower_bound(true_samples=true_samples,
                                 reconstructed_samples=reconstructed_samples,
