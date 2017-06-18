@@ -1,6 +1,6 @@
 import numpy as np
 import os
-from keras.optimizers import Adam
+from keras.optimizers import Adam, RMSprop
 from tqdm import tqdm
 
 from ..utils.config import load_config
@@ -23,6 +23,7 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
                  resume_from=None, deployable_models_only=False,
                  experiment_architecture='synthetic',
                  use_adaptive_contrast=False,
+                 noise_basis_dim=None,
                  optimiser_params=None):
         """
         Args:
@@ -34,6 +35,7 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
             experiment_architecture: str, network architecture descriptor
             use_adaptive_contrast: bool, whether to use an auxiliary distribution with known density,
                 which is closer to q(z|x) and allows for improving the power of the discriminator.
+            noise_basis_dim: int, noise basis dimensionality in case adaptive contrast is used.
             optimiser_params: dict, optional optimiser parameters
         """
         self.data_dim = data_dim
@@ -44,7 +46,9 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
                             'trainable': {'avb_trainable_discriminator': None, 'avb_trainable_encoder_decoder': None}}
 
         if use_adaptive_contrast:
-            self.encoder = MomentEstimationEncoder(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
+            self.noise_basis_dim = noise_basis_dim
+            self.encoder = MomentEstimationEncoder(data_dim=data_dim, noise_dim=noise_dim,
+                                                   noise_basis_dim=noise_basis_dim, latent_dim=latent_dim,
                                                    network_architecture=experiment_architecture)
             self.discriminator = AdaptivePriorDiscriminator(data_dim=data_dim, latent_dim=latent_dim,
                                                             network_architecture=experiment_architecture)
@@ -85,14 +89,17 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
             self.avb_trainable_encoder_decoder = FreezableModel(inputs=self.data_input,
                                                                 outputs=decoder_loss, name_prefix=['dec', 'enc'])
 
-            optimiser_params = optimiser_params or {'lr': 1e-3}
+            optimiser_params = optimiser_params or {'encdec': {'lr': 1e-4, 'beta_1': 0.5},
+                                                    'disc': {'lr': 2e-4, 'beta_1': 0.5}}
             self.avb_trainable_discriminator.freeze()
             self.avb_trainable_encoder_decoder.unfreeze()
-            self.avb_trainable_encoder_decoder.compile(optimizer=Adam(**optimiser_params), loss=None)
+            optimiser_params_encdec = optimiser_params['encdec']
+            self.avb_trainable_encoder_decoder.compile(optimizer=Adam(**optimiser_params_encdec), loss=None)
 
             self.avb_trainable_discriminator.unfreeze()
             self.avb_trainable_encoder_decoder.freeze()
-            self.avb_trainable_discriminator.compile(optimizer=Adam(**optimiser_params), loss=None)
+            optimiser_params_disc = optimiser_params['disc']
+            self.avb_trainable_discriminator.compile(optimizer=Adam(**optimiser_params_disc), loss=None)
 
         self.models_dict['trainable']['avb_trainable_encoder_decoder'] = self.avb_trainable_encoder_decoder
         self.models_dict['trainable']['avb_trainable_discriminator'] = self.avb_trainable_discriminator

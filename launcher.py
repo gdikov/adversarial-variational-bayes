@@ -21,12 +21,20 @@ def run_synthetic_experiment(model='vae'):
     train_data, train_labels = data['data'], data['target']
 
     if model == 'vae':
-        trainer = VAEModelTrainer(data_dim=data_dim, latent_dim=2, experiment_name='synthetic', overwrite=True)
+        trainer = VAEModelTrainer(data_dim=data_dim, latent_dim=2, experiment_name='synthetic', overwrite=True,
+                                  optimiser_params={'lr': 0.0006})
     elif model == 'avb':
         trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=2, noise_dim=data_dim, experiment_name='synthetic',
-                                  overwrite=True, use_adaptive_contrast=False, optimiser_params={'lr': 0.0008})
+                                  overwrite=True, use_adaptive_contrast=False,
+                                  optimiser_params={'encdec': {'lr': 0.0008, 'beta_1': 0.5},
+                                                    'disc': {'lr': 0.0008, 'beta_1': 0.5}})
+    elif model == 'avb+ac':
+        trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=2, noise_dim=data_dim, experiment_name='synthetic',
+                                  overwrite=True, use_adaptive_contrast=True,
+                                  optimiser_params={'encdec': {'lr': 0.0008, 'beta_1': 0.5},
+                                                    'disc': {'lr': 0.0008, 'beta_1': 0.5}})
     else:
-        raise ValueError('Unknown model type. Supported models: `vae` and `avb`.')
+        raise ValueError('Unknown model type. Supported models: `vae`, `avb` and `avb+ac`.')
 
     model_dir = trainer.run_training(train_data, batch_size=1024, epochs=2000)
     trained_model = trainer.get_model()
@@ -53,15 +61,18 @@ def run_mnist_experiment(model='vae'):
     test_data, test_labels = data['data'][-test_data_size:], data['target'][-test_data_size:]
 
     if model == 'vae':
-        trainer = VAEModelTrainer(data_dim=data_dim, latent_dim=latent_dim, experiment_name='mnist', overwrite=True)
+        trainer = VAEModelTrainer(data_dim=data_dim, latent_dim=latent_dim,
+                                  experiment_name='mnist_simple', overwrite=True)
     elif model == 'avb':
-        trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=latent_dim, noise_dim=data_dim / 28,
-                                  experiment_name='mnist', overwrite=True, use_adaptive_contrast=False,
-                                  optimiser_params={'lr': 1e-4, 'beta_1': 0.5})
+        trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=latent_dim, noise_dim=16,
+                                  experiment_name='mnist_simple', overwrite=True, use_adaptive_contrast=False,
+                                  optimiser_params={'encdec': {'lr': 1e-3, 'beta_1': 0.5},
+                                                    'disc': {'lr': 1e-3, 'beta_1': 0.5}})
     elif model == 'avb+ac':
-        trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=latent_dim, noise_dim=data_dim / 28,
-                                  experiment_name='mnist', overwrite=True, use_adaptive_contrast=True,
-                                  optimiser_params={'lr': 1e-4, 'beta_1': 0.5})
+        trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=latent_dim, noise_dim=16, noise_basis_dim=32,
+                                  experiment_name='mnist_simple', overwrite=True, use_adaptive_contrast=True,
+                                  optimiser_params={'encdec': {'lr': 1e-4, 'beta_1': 0.5},
+                                                    'disc': {'lr': 2e-4, 'beta_1': 0.5}})
     else:
         raise ValueError('Unknown model type. Supported models: `vae`, `avb` and `avb+ac`.')
 
@@ -89,4 +100,4 @@ def run_mnist_experiment(model='vae'):
 
 
 if __name__ == '__main__':
-    run_mnist_experiment('avb+ac')
+    run_mnist_experiment('vae')
