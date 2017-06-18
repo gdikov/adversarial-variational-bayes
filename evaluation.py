@@ -5,7 +5,7 @@ from avb.utils.datasets import load_npoints, load_mnist
 
 
 if __name__ == '__main__':
-    model_dir = "output/models/mnist"
+    model_dir = "output/models/mnist_simple"
     latent_samples = load_array(path_join(model_dir, 'latent_samples.npy'))
     reconstructed_samples = load_array(path_join(model_dir, 'reconstructed_samples.npy'))
     generated_samples = load_array(path_join(model_dir, 'generated_samples.npy'))
