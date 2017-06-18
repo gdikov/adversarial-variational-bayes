@@ -155,13 +155,13 @@ def synthetic_adaptive_prior_discriminator(data_dim, latent_dim):
     centered_data = Lambda(lambda x: 2 * x - 1, name='disc_centering_data_input')(data_input)
     discriminator_body_data = repeat_dense(centered_data, n_layers=2, n_units=256, name_prefix='disc_body_data')
     theta = Dense(4*256, activation='relu', name='disc_theta')(discriminator_body_data)
-    discriminator_body_data_t = repeat_dense(centered_data, n_layers=1, n_units=256, name_prefix='disc_body_data_t')
+    discriminator_body_data_t = repeat_dense(centered_data, n_layers=2, n_units=256, name_prefix='disc_body_data_t')
     discriminator_body_data_t = Dense(1, activation=None, name='disc_data_squash')(discriminator_body_data_t)
 
     latent_input = Input(shape=(latent_dim,), name='disc_internal_latent_input')
     discriminator_body_latent = repeat_dense(latent_input, n_layers=2, n_units=256, name_prefix='disc_body_latent')
     sigma = Dense(4*256, activation='relu', name='disc_sigma')(discriminator_body_latent)
-    discriminator_body_latent_t = repeat_dense(latent_input, n_layers=1, n_units=256, name_prefix='disc_body_latent_t')
+    discriminator_body_latent_t = repeat_dense(latent_input, n_layers=2, n_units=256, name_prefix='disc_body_latent_t')
     discriminator_body_latent_t = Dense(1, activation=None, name='disc_latent_squash')(discriminator_body_latent_t)
 
     merged_data_latent = Multiply(name='disc_mul_sigma_theta')([theta, sigma])
@@ -171,7 +171,6 @@ def synthetic_adaptive_prior_discriminator(data_dim, latent_dim):
                                                                merged_data_latent])
     collapsed_noise = Lambda(lambda x: 0.5 * ker.sum(x ** 2, axis=-1), name='disc_noise_addition')(latent_input)
     discriminator_output = Add(name='disc_add_all_toghether')([discriminator_output, collapsed_noise])
-    # discriminator_output = Activation(activation='sigmoid', name='disc_output')(discriminator_output)
     discriminator_model = Model(inputs=[data_input, latent_input], outputs=discriminator_output,
                                 name='disc_internal_model')
     return discriminator_model
@@ -284,7 +283,7 @@ def mnist_moment_estimation_encoder(data_dim, noise_dim, noise_basis_dim, latent
 
 
 def mnist_decoder(inputs):
-    decoder_body = Dense(100, activation='relu', name='dec_body_initial_dense')(inputs)
+    decoder_body = Dense(200, activation='relu', name='dec_body_initial_dense')(inputs)
     # use transposed convolutions to inflate the latent space to (?, 32, 32, 8)
     decoder_body = inflating_convolution(decoder_body, 3, projection_space_shape=(4, 4, 32), name_prefix='dec_body')
     # use single non-padded convolution to shrink the size to (?, 28, 28, 1)
@@ -300,18 +299,18 @@ def mnist_decoder_simple(inputs):
     return decoder_body
 
 
-def mnist_discriminator(data_dim, latent_dim):
+def mnist_adaptive_prior_discriminator(data_dim, latent_dim):
     data_input = Input(shape=(data_dim,), name='disc_internal_data_input')
     # center the data around 0 in [-1, 1] as it is in [0, 1].
     centered_data = Lambda(lambda x: 2 * x - 1, name='disc_centering_data_input')(data_input)
-    discriminator_body_data = repeat_dense(centered_data, n_layers=4, n_units=512, name_prefix='disc_body_data')
-    theta = Dense(4*512, activation='elu', name='disc_theta')(discriminator_body_data)
+    discriminator_body_data = repeat_dense(centered_data, n_layers=3, n_units=512, name_prefix='disc_body_data')
+    theta = Dense(4*512, activation='relu', name='disc_theta')(discriminator_body_data)
     discriminator_body_data_t = repeat_dense(centered_data, n_layers=3, n_units=512, name_prefix='disc_body_data_t')
     discriminator_body_data_t = Dense(1, activation=None, name='disc_data_squash')(discriminator_body_data_t)
 
     latent_input = Input(shape=(latent_dim,), name='disc_internal_latent_input')
-    discriminator_body_latent = repeat_dense(latent_input, n_layers=4, n_units=512, name_prefix='disc_body_latent')
-    sigma = Dense(4*512, activation='elu', name='disc_sigma')(discriminator_body_latent)
+    discriminator_body_latent = repeat_dense(latent_input, n_layers=3, n_units=512, name_prefix='disc_body_latent')
+    sigma = Dense(4*512, activation='relu', name='disc_sigma')(discriminator_body_latent)
     discriminator_body_latent_t = repeat_dense(latent_input, n_layers=3, n_units=512, name_prefix='disc_body_latent_t')
     discriminator_body_latent_t = Dense(1, activation=None, name='disc_latent_squash')(discriminator_body_latent_t)
 
@@ -322,7 +321,6 @@ def mnist_discriminator(data_dim, latent_dim):
                                                                merged_data_latent])
     collapsed_noise = Lambda(lambda x:  0.5 * ker.sum(x**2, axis=-1), name='disc_noise_addition')(latent_input)
     discriminator_output = Add(name='disc_add_all_toghether')([discriminator_output, collapsed_noise])
-    discriminator_output = Activation(activation='sigmoid', name='disc_output')(discriminator_output)
     discriminator_model = Model(inputs=[data_input, latent_input], outputs=discriminator_output,
                                 name='disc_internal_model')
     return discriminator_model
@@ -337,10 +335,8 @@ def mnist_discriminator_simple(data_dim, latent_dim):
     latent_input = Input(shape=(latent_dim,), name='disc_internal_latent_input')
     discriminator_body_latent = repeat_dense(latent_input, n_layers=4, n_units=512, name_prefix='disc_body_latent')
 
-    merged_data_latent = Multiply(name='disc_mul_sigma_theta')([discriminator_body_data, discriminator_body_latent])
-    merged_data_latent = Lambda(lambda x: ker.sum(x, axis=-1), name='disc_add_activ_sig_the')(merged_data_latent)
+    discriminator_output = Dot(name='disc_dot_sigma_theta')([discriminator_body_data, discriminator_body_latent])
 
-    discriminator_output = Activation(activation='sigmoid', name='disc_output')(merged_data_latent)
     discriminator_model = Model(inputs=[data_input, latent_input], outputs=discriminator_output,
                                 name='disc_internal_model')
     return discriminator_model
@@ -358,9 +354,9 @@ get_network_by_name = {'encoder': {'synthetic': synthetic_encoder,
                                    'mnist': mnist_decoder,
                                    'mnist_simple': mnist_decoder_simple},
                        'discriminator': {'synthetic': synthetic_discriminator,
-                                         'mnist': mnist_discriminator,
+                                         'mnist': mnist_discriminator_simple,
                                          'mnist_simple': mnist_discriminator_simple},
                        'adaptive_prior_discriminator': {'synthetic': synthetic_adaptive_prior_discriminator,
-                                                        'mnist': mnist_discriminator,
+                                                        'mnist': mnist_adaptive_prior_discriminator,
                                                         'mnist_simple': mnist_discriminator_simple}
                        }
