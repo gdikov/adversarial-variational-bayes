@@ -54,7 +54,7 @@ def run_synthetic_experiment(model='vae'):
 def run_mnist_experiment(model='vae'):
     logger.info("Starting an experiment on the MNIST dataset using {} model".format(model))
     data_dim = 28**2
-    latent_dim = 8
+    latent_dim = 2
     data = load_mnist(binarised=True, one_hot=False)
     test_data_size = 100
     train_data, train_labels = data['data'][:-test_data_size], data['target'][:-test_data_size]
@@ -62,7 +62,8 @@ def run_mnist_experiment(model='vae'):
 
     if model == 'vae':
         trainer = VAEModelTrainer(data_dim=data_dim, latent_dim=latent_dim,
-                                  experiment_name='mnist_simple', overwrite=True)
+                                  experiment_name='mnist_simple', overwrite=True,
+                                  optimiser_params={'lr': 0.001})
     elif model == 'avb':
         trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=latent_dim, noise_dim=16,
                                   experiment_name='mnist_simple', overwrite=True, use_adaptive_contrast=False,
@@ -70,13 +71,13 @@ def run_mnist_experiment(model='vae'):
                                                     'disc': {'lr': 1e-3, 'beta_1': 0.5}})
     elif model == 'avb+ac':
         trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=latent_dim, noise_dim=16, noise_basis_dim=32,
-                                  experiment_name='mnist_simple', overwrite=True, use_adaptive_contrast=True,
+                                  experiment_name='mnist', overwrite=True, use_adaptive_contrast=True,
                                   optimiser_params={'encdec': {'lr': 1e-4, 'beta_1': 0.5},
                                                     'disc': {'lr': 2e-4, 'beta_1': 0.5}})
     else:
         raise ValueError('Unknown model type. Supported models: `vae`, `avb` and `avb+ac`.')
 
-    model_dir = trainer.run_training(train_data, batch_size=500, epochs=10)
+    model_dir = trainer.run_training(train_data, batch_size=100, epochs=10)
     trained_model = trainer.get_model()
 
     sampling_size = 100
@@ -91,7 +92,9 @@ def run_mnist_experiment(model='vae'):
                                       sampling_size=sampling_size)
     save_array(path_join(model_dir, 'latent_samples.npy'), latent_vars)
     if latent_dim == 2:
-        plot_latent_2d(latent_vars, train_labels, fig_dirpath=model_dir)
+        from numpy import repeat
+        repeated_labels = repeat(test_labels, sampling_size, axis=0)
+        plot_latent_2d(latent_vars, repeated_labels, fig_dirpath=model_dir)
 
     generations = trained_model.generate(n_samples=100, batch_size=100)
     save_array(path_join(model_dir, 'generated_samples.npy'), generations)
@@ -100,4 +103,4 @@ def run_mnist_experiment(model='vae'):
 
 
 if __name__ == '__main__':
-    run_mnist_experiment('vae')
+    run_mnist_experiment('avb+ac')

@@ -201,7 +201,7 @@ def mnist_encoder_simple(data_dim, noise_dim, latent_dim=8):
     # center the input around 0
     # centered_data = Lambda(lambda x: 2 * x - 1, name='enc_centering_data_input')(data_input)
     # concat_input = Concatenate(axis=-1, name='enc_noise_data_concat')([centered_data, noise_input])
-    enc_body = repeat_dense(data_input, n_layers=3, n_units=512, activation='relu', name_prefix='enc_body')
+    enc_body = repeat_dense(data_input, n_layers=2, n_units=256, activation='relu', name_prefix='enc_body')
     enc_output = Dense(100, activation='relu', name='enc_dense_before_latent')(enc_body)
     enc_output = Dense(latent_dim, name='enc_latent_features')(enc_output)
     noise_resized = Dense(latent_dim, activation=None, name='enc_noise_resizing')(noise_input)
@@ -228,7 +228,7 @@ def mnist_reparametrized_encoder(inputs, latent_dim):
 def mnist_reparametrized_encoder_simple(inputs, latent_dim):
     # center the input around 0
     centered_data = Lambda(lambda x: 2 * x - 1, name='enc_centering_data_input')(inputs)
-    enc_body = repeat_dense(centered_data, n_layers=3, n_units=512, activation='relu', name_prefix='enc_body')
+    enc_body = repeat_dense(centered_data, n_layers=2, n_units=256, activation='relu', name_prefix='enc_body')
     enc_output = Dense(100, activation='relu', name='enc_dense_before_latent')(enc_body)
     latent_mean = Dense(latent_dim, activation=None, name='rep_enc_mean')(enc_output)
     # since the variance must be positive and this is not easy to restrict, interpret it in the log domain
@@ -282,7 +282,7 @@ def mnist_moment_estimation_encoder(data_dim, noise_dim, noise_basis_dim, latent
 
 
 def mnist_decoder(inputs):
-    decoder_body = Dense(300, activation='relu', name='dec_body_initial_dense')(inputs)
+    decoder_body = Dense(100, activation='relu', name='dec_body_initial_dense')(inputs)
     # use transposed convolutions to inflate the latent space to (?, 32, 32, 8)
     decoder_body = inflating_convolution(decoder_body, 3, projection_space_shape=(4, 4, 32), name_prefix='dec_body')
     # use single non-padded convolution to shrink the size to (?, 28, 28, 1)
