@@ -66,22 +66,38 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
                                                           deployable_models_only=deployable_models_only)
         if resume_from is None:
             if use_adaptive_contrast:
-                posterior_approximation, posterior_mean, posterior_var = self.encoder(self.data_input, is_learning=True)
+                posterior_approximation, norm_posterior_approximation, \
+                    posterior_mean, posterior_var, log_adaptive_prior, log_latent_space = \
+                    self.encoder(self.data_input, is_learning=True)
                 discriminator_output_prior = self.discriminator([self.data_input, posterior_mean, posterior_var],
                                                                 from_posterior=False)
-                discriminator_output_posterior = self.discriminator([self.data_input, posterior_approximation],
+                discriminator_output_posterior = self.discriminator([self.data_input, norm_posterior_approximation],
                                                                     from_posterior=True)
+                reconstruction_log_likelihood = self.decoder([self.data_input, posterior_approximation],
+                                                             is_learning=True)
+
+                discriminator_loss = AVBDiscriminatorLossLayer(name='disc_loss')([discriminator_output_prior,
+                                                                                  discriminator_output_posterior],
+                                                                                 is_in_logits=True)
+                decoder_loss = AVBEncoderDecoderLossLayer(name='dec_loss')([reconstruction_log_likelihood,
+                                                                            discriminator_output_posterior,
+                                                                            log_adaptive_prior,
+                                                                            log_latent_space],
+                                                                           use_adaptive_contrast=True)
             else:
                 posterior_approximation = self.encoder(self.data_input, is_learning=True)
                 discriminator_output_prior = self.discriminator(self.data_input, from_posterior=False)
                 discriminator_output_posterior = self.discriminator([self.data_input, posterior_approximation],
                                                                     from_posterior=True)
-            reconstruction_log_likelihood = self.decoder([self.data_input, posterior_approximation], is_learning=True)
+                reconstruction_log_likelihood = self.decoder([self.data_input, posterior_approximation],
+                                                             is_learning=True)
 
-            discriminator_loss = AVBDiscriminatorLossLayer(name='disc_loss')([discriminator_output_prior,
-                                                                              discriminator_output_posterior])
-            decoder_loss = AVBEncoderDecoderLossLayer(name='dec_loss')([reconstruction_log_likelihood,
-                                                                        discriminator_output_posterior])
+                discriminator_loss = AVBDiscriminatorLossLayer(name='disc_loss')([discriminator_output_prior,
+                                                                                  discriminator_output_posterior],
+                                                                                 is_in_logits=True)
+                decoder_loss = AVBEncoderDecoderLossLayer(name='dec_loss')([reconstruction_log_likelihood,
+                                                                            discriminator_output_posterior],
+                                                                           use_adaptive_contrast=False)
 
             # define the trainable models
             self.avb_trainable_discriminator = FreezableModel(inputs=self.data_input,

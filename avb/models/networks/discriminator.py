@@ -139,7 +139,8 @@ class AdaptivePriorDiscriminator(BaseDiscriminator):
 
         self.prior_mean = Input(shape=(latent_dim,), name='disc_prior_mean_input')
         self.prior_var = Input(shape=(latent_dim,), name='disc_prior_var_input')
-        discriminator_model = get_network_by_name['discriminator'][network_architecture](data_dim, latent_dim)
+        discriminator_model = get_network_by_name['adaptive_prior_discriminator'][network_architecture](data_dim,
+                                                                                                        latent_dim)
         # self.prior_sampler.arguments = {'mean': self.prior_mean, 'variance': self.prior_var}
         prior_distribution = self.prior_sampler([self.prior_mean, self.prior_var])
         from_prior_output = discriminator_model([self.data_input, prior_distribution])

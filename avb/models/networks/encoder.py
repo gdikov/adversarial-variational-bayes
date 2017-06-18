@@ -1,6 +1,7 @@
 import logging
-
 import keras.backend as ker
+
+from numpy import pi as pi_const
 from keras.layers import Lambda, Concatenate, Multiply, Add, Dense
 from keras.models import Input
 from keras.models import Model
@@ -139,7 +140,7 @@ class MomentEstimationEncoder(BaseEncoder):
         noise = self.standard_normal_sampler(self.data_input)
         noise_basis_vectors = noise_basis_extraction(noise)
 
-        coefficients_and_z0 = data_feature_extraction([self.data_input, noise])
+        coefficients_and_z0 = data_feature_extraction(self.data_input)
         coefficients = coefficients_and_z0[:-1]
         z_0 = coefficients_and_z0[-1]
 
@@ -175,10 +176,21 @@ class MomentEstimationEncoder(BaseEncoder):
         posterior_mean = Add(name='enc_moments_mean_add_z0')([posterior_mean, z_0])
         posterior_var = Add(name='enc_moments_var')(posterior_var)
 
+        normalised_latent_factors = Lambda(lambda x: (x[0] - x[1]) / ker.sqrt(x[2] + 1e-5),
+                                           name='enc_norm_posterior')([latent_factors, posterior_mean, posterior_var])
+
+        log_latent_space = Lambda(lambda x: -0.5 * ker.sum(x**2 + ker.log(2*pi_const), axis=1),
+                                  name='enc_log_approx_posterior')(latent_factors)
+
+        log_adaptive_prior = Lambda(lambda x: -0.5 * ker.sum(x[0]**2 + ker.log(x[1]) + ker.log(2*pi_const), axis=1),
+                                    name='enc_log_adaptive_prior')([normalised_latent_factors, posterior_var])
+
         self.encoder_inference_model = Model(inputs=self.data_input, outputs=latent_factors,
                                              name='encoder_inference_model')
         self.encoder_trainable_model = Model(inputs=self.data_input,
-                                             outputs=[latent_factors, posterior_mean, posterior_var],
+                                             outputs=[latent_factors, normalised_latent_factors,
+                                                      posterior_mean, posterior_var,
+                                                      log_adaptive_prior, log_latent_space],
                                              name='encoder_trainable_model')
 
     def __call__(self, *args, **kwargs):
