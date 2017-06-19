@@ -335,7 +335,8 @@ def mnist_discriminator_simple(data_dim, latent_dim):
     latent_input = Input(shape=(latent_dim,), name='disc_internal_latent_input')
     discriminator_body_latent = repeat_dense(latent_input, n_layers=4, n_units=512, name_prefix='disc_body_latent')
 
-    discriminator_output = Dot(name='disc_dot_sigma_theta')([discriminator_body_data, discriminator_body_latent])
+    discriminator_output = Dot(axes=-1, name='disc_dot_sigma_theta')([discriminator_body_data,
+                                                                      discriminator_body_latent])
 
     discriminator_model = Model(inputs=[data_input, latent_input], outputs=discriminator_output,
                                 name='disc_internal_model')
