@@ -54,8 +54,9 @@ def reconstruction_log_likelihood(true_samples, estimated_params):
 
 def reconstruction_error(true_samples, reconstructed_samples_probs):
     sampling_size = reconstructed_samples_probs.shape[0] // true_samples.shape[0]
+    data_dim = true_samples.shape[1]
     true_samples = np.repeat(true_samples, sampling_size, axis=0)
-    mean_cross_entropy = np.mean(-reconstruction_log_likelihood(true_samples, reconstructed_samples_probs))
+    mean_cross_entropy = np.mean(-reconstruction_log_likelihood(true_samples, reconstructed_samples_probs) / data_dim)
     return mean_cross_entropy
 
 

@@ -1,7 +1,8 @@
 import logging
-
 import keras.backend as ker
-from keras.layers import Lambda, Concatenate, Multiply
+
+from numpy import pi as pi_const
+from keras.layers import Lambda, Concatenate, Multiply, Add, Dense
 from keras.models import Input
 from keras.models import Model
 
@@ -27,19 +28,28 @@ class BaseEncoder(object):
 
     def sample_standard_normal_noise(self, inputs, **kwargs):
         n_samples = kwargs.get('n_samples', ker.shape(inputs)[0])
-        samples_isotropic = ker.random_normal(shape=(n_samples, self.noise_dim),
-                                              mean=0, stddev=1, seed=config['seed'])
+        n_basis_noise_vectors = kwargs.get('n_basis', -1)
+        if n_basis_noise_vectors > 0:
+            samples_isotropic = ker.random_normal(shape=(n_samples, n_basis_noise_vectors, self.noise_dim),
+                                                  mean=0, stddev=1, seed=config['seed'])
+        else:
+            samples_isotropic = ker.random_normal(shape=(n_samples, self.noise_dim),
+                                                  mean=0, stddev=1, seed=config['seed'])
         op_mode = kwargs.get('mode', 'none')
         if op_mode == 'concatenate':
             concat = Concatenate(axis=1, name='enc_noise_concatenation')([inputs, samples_isotropic])
             return concat
+        elif op_mode == 'add':
+            resized_noise = Dense(self.data_dim, activation=None, name='enc_resized_noise_sampler')(samples_isotropic)
+            added_noise_data = Add(name='enc_adding_noise_data')([inputs, resized_noise])
+            return added_noise_data
         return samples_isotropic
 
     def __call__(self, *args, **kwargs):
         return None
 
 
-class Encoder(BaseEncoder):
+class StandardEncoder(BaseEncoder):
     """
     An Encoder model is trained to parametrise an arbitrary posterior approximate distribution given some 
     input x, i.e. q(z|x). The model takes as input concatenated data samples and arbitrary noise and produces
@@ -66,12 +76,13 @@ class Encoder(BaseEncoder):
             latent_dim: int, flattened latent space dimensionality
             network_architecture: str, the architecture name for the body of the Encoder model
         """
-        super(Encoder, self).__init__(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
-                                      network_architecture=network_architecture, name='Standard Encoder')
+        super(StandardEncoder, self).__init__(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
+                                              network_architecture=network_architecture, name='Standard Encoder')
 
-        self.standard_normal_sampler.arguments = {'mode': 'concatenate'}
-        data_noise_concat = self.standard_normal_sampler(self.data_input)
-        latent_factors = get_network_by_name['encoder'][network_architecture](data_noise_concat, latent_dim)
+        # self.standard_normal_sampler.arguments = {'mode': 'add'}
+        noise_input = self.standard_normal_sampler(self.data_input)
+        encoder_body_model = get_network_by_name['encoder'][network_architecture](data_dim, noise_dim, latent_dim)
+        latent_factors = encoder_body_model([self.data_input, noise_input])
         self.encoder_model = Model(inputs=self.data_input, outputs=latent_factors, name='encoder')
 
     def __call__(self, *args, **kwargs):
@@ -107,11 +118,12 @@ class MomentEstimationEncoder(BaseEncoder):
 
     """
 
-    def __init__(self, data_dim, noise_dim, latent_dim, network_architecture='mnist'):
+    def __init__(self, data_dim, noise_dim, noise_basis_dim, latent_dim, network_architecture='mnist'):
         """
         Args:
             data_dim: int, flattened data space dimensionality 
             noise_dim: int, flattened noise space dimensionality
+            noise_basis_dim: int, noise basis vectors dimensionality
             latent_dim: int, flattened latent space dimensionality
             network_architecture: str, the architecture name for the body of the moment estimation Encoder model
         """
@@ -119,37 +131,66 @@ class MomentEstimationEncoder(BaseEncoder):
                                                       network_architecture=network_architecture,
                                                       name='Posterior Moment Estimation Encoder')
 
-        models = get_network_by_name['moment_estimation_encoder'][network_architecture](data_dim, noise_dim, latent_dim)
+        models = get_network_by_name['moment_estimation_encoder'][network_architecture](
+            data_dim=data_dim, noise_dim=noise_dim, noise_basis_dim=noise_basis_dim, latent_dim=latent_dim)
 
         data_feature_extraction, noise_basis_extraction = models
-        coefficients = data_feature_extraction(self.data_input)
-        # the sampling Lambda layer should be called with a Keras tensor. Otherwise, unused input.
+
+        self.standard_normal_sampler.arguments = {'n_basis': noise_basis_dim}
         noise = self.standard_normal_sampler(self.data_input)
         noise_basis_vectors = noise_basis_extraction(noise)
-        weighted_vectors = Multiply(name='enc_multiply_coeff_basis_vectors')([coefficients, noise_basis_vectors])
-        latent_factors = Lambda(lambda x: ker.sum(x, axis=1), name='enc_add_weighted_basis_vectors')(weighted_vectors)
 
-        self.standard_normal_sampler2.arguments = {'n_samples': 1000}
+        coefficients_and_z0 = data_feature_extraction(self.data_input)
+        coefficients = coefficients_and_z0[:-1]
+        z_0 = coefficients_and_z0[-1]
+
+        latent_factors = []
+        for i, (a, v) in enumerate(zip(coefficients, noise_basis_vectors)):
+            latent_factors.append(Multiply(name='enc_elemwise_coeff_vecs_mult_{}'.format(i))([a, v]))
+        latent_factors = Add(name='enc_add_weighted_vecs')(latent_factors)
+        latent_factors = Add(name='add_z0_to_linear_combination')([z_0, latent_factors])
+
+        self.standard_normal_sampler2.arguments = {'n_basis': noise_basis_dim, 'n_samples': 100}
         more_noise = self.standard_normal_sampler2(self.data_input)
         sampling_basis_vectors = noise_basis_extraction(more_noise)
-        # compute empirical mean as the batchsize-wise mean of all noise vectors
-        mean_basis_vectors = Lambda(lambda x: ker.mean(x, axis=0),
-                                    name='enc_noise_basis_vectors_mean')(sampling_basis_vectors)
-        # do the same for the empirical variance and compute similar posterior parametrization for the variance
-        var_basis_vectors = Lambda(lambda x: ker.var(x, axis=0),
-                                   name='enc_noise_basis_vectors_var')(sampling_basis_vectors)
-        # and parametrise the posterior moment as described in the AVB paper
-        posterior_mean = Lambda(lambda x: ker.sum(x[0] * x[1], axis=1),
-                                name='enc_moments_mean')([coefficients, mean_basis_vectors])
 
-        # compute similar posterior parametrization for the variance
-        posterior_var = Lambda(lambda x: ker.sum(x[0] ** 2 * x[1], axis=1),
-                               name='enc_moments_var')([coefficients, var_basis_vectors])
+        posterior_mean = []
+        posterior_var = []
+        for i in range(noise_basis_dim):
+            # compute empirical mean as the batchsize-wise mean of all sampling vectors for each basis dimension
+            mean_basis_vectors_i = Lambda(lambda x: ker.mean(x, axis=0),
+                                          name='enc_noise_basis_vectors_mean_{}'.format(i))(sampling_basis_vectors[i])
+            # and do the same for the empirical variance and compute similar posterior parametrization for the variance
+            var_basis_vectors_i = Lambda(lambda x: ker.var(x, axis=0),
+                                         name='enc_noise_basis_vectors_var_{}'.format(i))(sampling_basis_vectors[i])
+            # and parametrise the posterior moment as described in the AVB paper
+            posterior_mean.append(Lambda(lambda x: x[0] * x[1],
+                                         name='enc_moments_mult_mean_{}'.format(i))([coefficients[i],
+                                                                                     mean_basis_vectors_i]))
+
+            # compute similar posterior parametrization for the variance
+            posterior_var.append(Lambda(lambda x: x[0]*x[0]*x[1],
+                                        name='enc_moments_mult_var_{}'.format(i))([coefficients[i],
+                                                                                   var_basis_vectors_i]))
+        posterior_mean = Add(name='enc_moments_mean')(posterior_mean)
+        posterior_mean = Add(name='enc_moments_mean_add_z0')([posterior_mean, z_0])
+        posterior_var = Add(name='enc_moments_var')(posterior_var)
+
+        normalised_latent_factors = Lambda(lambda x: (x[0] - x[1]) / ker.sqrt(x[2] + 1e-5),
+                                           name='enc_norm_posterior')([latent_factors, posterior_mean, posterior_var])
+
+        log_latent_space = Lambda(lambda x: -0.5 * ker.sum(x**2 + ker.log(2*pi_const), axis=1),
+                                  name='enc_log_approx_posterior')(latent_factors)
+
+        log_adaptive_prior = Lambda(lambda x: -0.5 * ker.sum(x[0]**2 + ker.log(x[1]) + ker.log(2*pi_const), axis=1),
+                                    name='enc_log_adaptive_prior')([normalised_latent_factors, posterior_var])
 
         self.encoder_inference_model = Model(inputs=self.data_input, outputs=latent_factors,
                                              name='encoder_inference_model')
         self.encoder_trainable_model = Model(inputs=self.data_input,
-                                             outputs=[latent_factors, posterior_mean, posterior_var],
+                                             outputs=[latent_factors, normalised_latent_factors,
+                                                      posterior_mean, posterior_var,
+                                                      log_adaptive_prior, log_latent_space],
                                              name='encoder_trainable_model')
 
     def __call__(self, *args, **kwargs):

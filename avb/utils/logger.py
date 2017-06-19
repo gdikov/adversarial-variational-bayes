@@ -5,7 +5,7 @@ import os
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(name)s:%(message)s')
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 
 # log_path = os.path.join('output', 'log')
 # if not os.path.exists(log_path):
