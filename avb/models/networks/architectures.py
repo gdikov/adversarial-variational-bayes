@@ -1,8 +1,6 @@
 import keras.backend as ker
-from keras.layers import Activation, Dense, Conv2DTranspose, Conv2D, Dot, Reshape, \
-    Multiply, Concatenate, Add, Lambda
+from keras.layers import Dense, Conv2DTranspose, Conv2D, Dot, Reshape, Multiply, Concatenate, Add, Lambda
 from keras.models import Model, Input
-from tensorflow import int32
 
 
 def repeat_dense(inputs, n_layers, n_units=256, activation='relu', name_prefix=None):
@@ -122,7 +120,8 @@ def synthetic_moment_estimation_encoder(data_dim, noise_dim, noise_basis_dim, la
     latent_0 = Dense(latent_dim, name='enc_coefficients')(extracted_features)
     coefficients = []
     for i in xrange(noise_basis_dim):
-        coefficients.append(Dense(latent_dim, name='enc_coefficients_{}'.format(i))(extracted_features))
+        coefficients.append(Dense(latent_dim, activation='elu',
+                                  name='enc_coefficients_{}'.format(i))(extracted_features))
     coefficients.append(latent_0)
     coefficients_model = Model(inputs=data_input, outputs=coefficients, name='enc_coefficients_model')
 
@@ -275,7 +274,8 @@ def mnist_moment_estimation_encoder(data_dim, noise_dim, noise_basis_dim, latent
     latent_0 = Dense(latent_dim, name='enc_coefficients')(extracted_features)
     coefficients = []
     for i in xrange(noise_basis_dim):
-        coefficients.append(Dense(latent_dim, name='enc_coefficients_{}'.format(i))(extracted_features))
+        coefficients.append(Dense(latent_dim, activation='elu',
+                                  name='enc_coefficients_{}'.format(i))(extracted_features))
     coefficients.append(latent_0)
     coefficients_model = Model(inputs=data_input, outputs=coefficients, name='enc_coefficients_model')
 
