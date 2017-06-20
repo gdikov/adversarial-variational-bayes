@@ -83,7 +83,7 @@ def run_mnist_experiment(model='vae'):
     else:
         raise ValueError('Unknown model type. Supported models: `vae`, `avb` and `avb+ac`.')
 
-    model_dir = trainer.run_training(train_data, batch_size=64, epochs=100)
+    model_dir = trainer.run_training(train_data, batch_size=64, epochs=1000)
     trained_model = trainer.get_model()
 
     sampling_size = 100
@@ -108,4 +108,4 @@ def run_mnist_experiment(model='vae'):
 
 
 if __name__ == '__main__':
-    run_mnist_experiment('avb')
+    run_mnist_experiment('avb+ac')
