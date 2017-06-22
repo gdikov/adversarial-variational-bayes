@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*,cover
+.hypothesis/
+
+# IPython Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# virtualenv
+.python2
+.python3
+
+# PyCharm project settings
+.idea
+
+# Large datasets
+data/
+
+# Notes
+NOTES.txt
+
+# logs and temp and models
+output
