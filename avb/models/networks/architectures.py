@@ -120,8 +120,7 @@ def synthetic_moment_estimation_encoder(data_dim, noise_dim, noise_basis_dim, la
     latent_0 = Dense(latent_dim, name='enc_coefficients')(extracted_features)
     coefficients = []
     for i in xrange(noise_basis_dim):
-        coefficients.append(Dense(latent_dim, activation='elu',
-                                  name='enc_coefficients_{}'.format(i))(extracted_features))
+        coefficients.append(Dense(latent_dim, name='enc_coefficients_{}'.format(i))(extracted_features))
     coefficients.append(latent_0)
     coefficients_model = Model(inputs=data_input, outputs=coefficients, name='enc_coefficients_model')
 
@@ -274,8 +273,7 @@ def mnist_moment_estimation_encoder(data_dim, noise_dim, noise_basis_dim, latent
     latent_0 = Dense(latent_dim, name='enc_coefficients')(extracted_features)
     coefficients = []
     for i in xrange(noise_basis_dim):
-        coefficients.append(Dense(latent_dim, activation='elu',
-                                  name='enc_coefficients_{}'.format(i))(extracted_features))
+        coefficients.append(Dense(latent_dim, name='enc_coefficients_{}'.format(i))(extracted_features))
     coefficients.append(latent_0)
     coefficients_model = Model(inputs=data_input, outputs=coefficients, name='enc_coefficients_model')
 

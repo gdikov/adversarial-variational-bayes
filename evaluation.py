@@ -5,7 +5,7 @@ from avb.utils.datasets import load_npoints, load_mnist
 
 
 if __name__ == '__main__':
-    experiment = 'mnist'
+    experiment = 'synthetic'
     if experiment == 'mnist':
         model_dir = "output/models/mnist"
         data = load_mnist(binarised=True, one_hot=False)

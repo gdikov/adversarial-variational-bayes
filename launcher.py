@@ -29,7 +29,7 @@ def run_synthetic_experiment(model='vae'):
                                   optimiser_params={'encdec': {'lr': 0.0008, 'beta_1': 0.5},
                                                     'disc': {'lr': 0.0008, 'beta_1': 0.5}})
     elif model == 'avb+ac':
-        trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=2, noise_dim=data_dim, noise_basis_dim=4,
+        trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=2, noise_dim=data_dim, noise_basis_dim=8,
                                   experiment_name='synthetic',  overwrite=True, use_adaptive_contrast=True,
                                   optimiser_params={'encdec': {'lr': 0.0001, 'beta_1': 0.5},
                                                     'disc': {'lr': 0.0002, 'beta_1': 0.5}})
@@ -108,4 +108,4 @@ def run_mnist_experiment(model='vae'):
 
 
 if __name__ == '__main__':
-    run_mnist_experiment('avb+ac')
+    run_synthetic_experiment('avb+ac')
