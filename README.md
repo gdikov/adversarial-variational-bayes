@@ -27,13 +27,13 @@ These are some examples of the reproduced experiments on the latent space of the
 and random generated samples trained on the binarized MNIST dataset. Both examples use AVB without AC. More 
 images are coming soon.
 
-![2-D latent space of AVB on the synthetic dataset](./doc/results/poster_synthetic_avb.png)
+![2-D latent space of AVB on the synthetic dataset](./doc/results/poster_synthetic_avb.png =250x)
 
-![Random generations from AVB on the MNIST dataset (Preliminary)](./doc/results/poster_mnist_avb.png)
+![Random generations from AVB on the MNIST dataset (Preliminary)](./doc/results/poster_mnist_avb.png =250x)
 
 ## Acknowledgements
-Many thanks to ... for the fruitful discussions and the invaluable advice.
-The code makes use of the [ITE](https://bitbucket.org/szzoli/ite/) package by Zoltán Szabó
+Many thanks to Maximilian Karl for the fruitful discussions and the invaluable advice.
+This implementation makes use of the [ITE](https://bitbucket.org/szzoli/ite/) package by Zoltán Szabó.
 
 ## References
 [1]: 
