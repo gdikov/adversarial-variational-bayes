@@ -27,8 +27,14 @@ These are some examples of the reproduced experiments on the latent space of the
 and random generated samples trained on the binarized MNIST dataset. Both examples use AVB without AC. More 
 images are coming soon.
 
-<img src="./doc/results/poster_synthetic_avb.png" width="250">
-<img src="./doc/results/poster_mnist_avb.png" width="250">
+<div style="width:520 px">
+<div style="float:left; width:100 px"><img src="./doc/results/poster_synthetic_avb.png" width="250"></div>
+<div style="float:left; width:100 px"><img src="./doc/results/poster_mnist_avb.png" width="250"></div>
+<div style="clear:both"></div>
+</div>
+
+
+
 
 ## Acknowledgements
 Many thanks to Maximilian Karl for the fruitful discussions and the invaluable advice.
