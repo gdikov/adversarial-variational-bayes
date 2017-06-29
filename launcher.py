@@ -22,7 +22,7 @@ def run_synthetic_experiment(model='vae'):
 
     if model == 'vae':
         trainer = VAEModelTrainer(data_dim=data_dim, latent_dim=2, experiment_name='synthetic', overwrite=True,
-                                  optimiser_params={'lr': 0.0006})
+                                  optimiser_params={'lr': 0.001})
     elif model == 'avb':
         trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=2, noise_dim=data_dim, experiment_name='synthetic',
                                   overwrite=True, use_adaptive_contrast=False,
@@ -83,7 +83,7 @@ def run_mnist_experiment(model='vae'):
     else:
         raise ValueError('Unknown model type. Supported models: `vae`, `avb` and `avb+ac`.')
 
-    model_dir = trainer.run_training(train_data, batch_size=64, epochs=1000)
+    model_dir = trainer.run_training(train_data, batch_size=64, epochs=1)
     trained_model = trainer.get_model()
 
     sampling_size = 100
@@ -108,4 +108,4 @@ def run_mnist_experiment(model='vae'):
 
 
 if __name__ == '__main__':
-    run_synthetic_experiment('avb+ac')
+    run_synthetic_experiment('vae')

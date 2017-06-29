@@ -1,10 +1,13 @@
+from __future__ import absolute_import
+from builtins import range, next
+
 from keras.models import Model
 from keras.optimizers import RMSprop
 from tqdm import tqdm
 
 from ..utils.config import load_config
-from losses import VAELossLayer
-from networks import ReparametrisedGaussianEncoder, Decoder
+from .losses import VAELossLayer
+from .networks import ReparametrisedGaussianEncoder, Decoder
 from ..data_iterator import VAEDataIterator
 from ..models import BaseVariationalAutoencoder
 
@@ -60,10 +63,10 @@ class GaussianVariationalAutoencoder(BaseVariationalAutoencoder):
         data_iterator, batches_per_epoch = self.data_iterator.iter(data, batch_size, mode='training', shuffle=True)
 
         history = {'vae_loss': []}
-        for _ in tqdm(xrange(epochs)):
+        for _ in tqdm(range(epochs)):
             epoch_loss_history_vae = []
-            for it in xrange(batches_per_epoch):
-                data_batch = data_iterator.next()
+            for it in range(batches_per_epoch):
+                data_batch = next(data_iterator)
                 loss_autoencoder = self.vae_model.train_on_batch(data_batch[:-1], None)
                 epoch_loss_history_vae.append(loss_autoencoder)
             history['vae_loss'].append(epoch_loss_history_vae)

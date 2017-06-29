@@ -1,5 +1,9 @@
+from __future__ import absolute_import
+from six import iteritems
+
 import numpy as np
 import os
+
 from keras.models import Model, Input, model_from_json
 from scipy.stats import norm as standard_gaussian
 
@@ -155,14 +159,14 @@ class BaseVariationalAutoencoder(object):
         if not os.path.exists(dirname):
             os.makedirs(dirname)
         if not deployable_models_only:
-            for name, model in self.models_dict['trainable'].iteritems():
+            for name, model in iteritems(self.models_dict['trainable']):
                 model.save(os.path.join(dirname, '{}.h5'.format(name)), include_optimizer=True)
-        for name, model in self.models_dict['deployable'].iteritems():
+        for name, model in iteritems(self.models_dict['deployable']):
             model.save_weights(os.path.join(dirname, '{}.h5'.format(name)))
 
         if save_metainfo:
             for model_type in self.models_dict.keys():
-                for name, model in self.models_dict[model_type].iteritems():
+                for name, model in iteritems(self.models_dict[model_type]):
                     with open(os.path.join(dirname, '{}.json'.format(name)), 'w') as f:
                         f.write(model.to_json())
 

@@ -1,6 +1,10 @@
+from __future__ import absolute_import
+from builtins import range
+
 import keras.backend as ker
 from keras.layers import Dense, Conv2DTranspose, Conv2D, Dot, Reshape, Multiply, Concatenate, Add, Lambda
 from keras.models import Model, Input
+from numpy import prod
 
 
 def repeat_dense(inputs, n_layers, n_units=256, activation='relu', name_prefix=None):
@@ -25,7 +29,7 @@ def repeat_dense(inputs, n_layers, n_units=256, activation='relu', name_prefix=N
     n_layers = int(n_layers)
     name_prefix = name_prefix or 'rep_{}_dim{}'.format(activation, n_units)
     h = Dense(n_units, activation=activation, name=name_prefix + '_0')(inputs)
-    for i in xrange(1, n_layers):
+    for i in range(1, n_layers):
         h = Dense(n_units, activation=activation, name=name_prefix + '_{}'.format(i))(h)
     return h
 
@@ -33,13 +37,13 @@ def repeat_dense(inputs, n_layers, n_units=256, activation='relu', name_prefix=N
 def inflating_convolution(inputs, n_inflation_layers, projection_space_shape=(4, 4, 32), name_prefix=None):
     assert len(projection_space_shape) == 3, \
         "Projection space shape is {} but should be 3.".format(len(projection_space_shape))
-    flattened_space_dim = reduce(lambda x, y: x*y, projection_space_shape)
+    flattened_space_dim = prod(projection_space_shape)
     projection = Dense(flattened_space_dim, activation=None, name=name_prefix + '_projection')(inputs)
     reshape = Reshape(projection_space_shape, name=name_prefix + '_reshape')(projection)
     depth = projection_space_shape[2]
     inflated = Conv2DTranspose(filters=min(32, depth // 2), kernel_size=(5, 5), strides=(2, 2), activation='relu',
                                padding='same', name=name_prefix + '_transposed_conv_0')(reshape)
-    for i in xrange(1, n_inflation_layers):
+    for i in range(1, n_inflation_layers):
         inflated = Conv2DTranspose(filters=max(1, depth // 2**(i+1)), kernel_size=(5, 5),
                                    strides=(2, 2), activation='relu', padding='same',
                                    name=name_prefix + '_transpose_conv_{}'.format(i))(inflated)
@@ -62,7 +66,7 @@ def deflating_convolution(inputs, n_deflation_layers, n_filters_init=32, noise=N
                       padding='same', activation='relu', name=name_prefix + '_conv_0')(inputs)
     if noise is not None:
         deflated = add_linear_noise(deflated, noise, 0)
-    for i in xrange(1, n_deflation_layers):
+    for i in range(1, n_deflation_layers):
         deflated = Conv2D(filters=n_filters_init * (2**i), kernel_size=(5, 5), strides=(2, 2),
                           padding='same', activation='relu', name=name_prefix + '_conv_{}'.format(i))(deflated)
         # if noise is not None:
@@ -119,7 +123,7 @@ def synthetic_moment_estimation_encoder(data_dim, noise_dim, noise_basis_dim, la
     extracted_features = repeat_dense(centered_data, n_layers=2, n_units=256, name_prefix='enc_body')
     latent_0 = Dense(latent_dim, name='enc_coefficients')(extracted_features)
     coefficients = []
-    for i in xrange(noise_basis_dim):
+    for i in range(noise_basis_dim):
         coefficients.append(Dense(latent_dim, name='enc_coefficients_{}'.format(i))(extracted_features))
     coefficients.append(latent_0)
     coefficients_model = Model(inputs=data_input, outputs=coefficients, name='enc_coefficients_model')
@@ -272,7 +276,7 @@ def mnist_moment_estimation_encoder(data_dim, noise_dim, noise_basis_dim, latent
 
     latent_0 = Dense(latent_dim, name='enc_coefficients')(extracted_features)
     coefficients = []
-    for i in xrange(noise_basis_dim):
+    for i in range(noise_basis_dim):
         coefficients.append(Dense(latent_dim, name='enc_coefficients_{}'.format(i))(extracted_features))
     coefficients.append(latent_0)
     coefficients_model = Model(inputs=data_input, outputs=coefficients, name='enc_coefficients_model')

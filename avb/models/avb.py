@@ -1,11 +1,14 @@
+from __future__ import absolute_import
+from builtins import range, next
+
 import numpy as np
 import os
 from keras.optimizers import Adam, RMSprop
 from tqdm import tqdm
 
 from ..utils.config import load_config
-from losses import AVBDiscriminatorLossLayer, AVBEncoderDecoderLossLayer
-from networks import StandardEncoder, MomentEstimationEncoder, Decoder, Discriminator, AdaptivePriorDiscriminator
+from .losses import AVBDiscriminatorLossLayer, AVBEncoderDecoderLossLayer
+from .networks import StandardEncoder, MomentEstimationEncoder, Decoder, Discriminator, AdaptivePriorDiscriminator
 from ..data_iterator import AVBDataIterator
 from ..models.base_vae import BaseVariationalAutoencoder
 from ..models.freezable import FreezableModel
@@ -148,14 +151,14 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
         history = {'encoderdecoder_loss': [], 'discriminator_loss': []}
         epoch_loss = np.inf
 
-        for ep in tqdm(xrange(epochs)):
+        for ep in tqdm(range(epochs)):
             epoch_loss_history_encdec = []
             epoch_loss_history_disc = []
-            for it in xrange(iters_per_epoch):
-                training_batch = data_iterator.next()
+            for it in range(iters_per_epoch):
+                training_batch = next(data_iterator)
                 loss_autoencoder = self.avb_trainable_encoder_decoder.train_on_batch(training_batch, None)
                 epoch_loss_history_encdec.append(loss_autoencoder)
-                for _ in xrange(discriminator_repetitions):
+                for _ in range(discriminator_repetitions):
                     loss_discriminator = self.avb_trainable_discriminator.train_on_batch(training_batch, None)
                     epoch_loss_history_disc.append(loss_discriminator)
 

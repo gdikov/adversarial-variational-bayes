@@ -1,9 +1,11 @@
+from __future__ import absolute_import
+
 import logging
 from tensorflow.contrib.distributions import Bernoulli
 from keras.layers import Lambda, Dense
 from keras.models import Model, Input
 
-from architectures import get_network_by_name
+from .architectures import get_network_by_name
 
 logger = logging.getLogger(__name__)
 

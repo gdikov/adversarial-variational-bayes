@@ -1,3 +1,6 @@
+from __future__ import absolute_import
+from builtins import range
+
 import logging
 import keras.backend as ker
 
@@ -6,7 +9,7 @@ from keras.layers import Lambda, Concatenate, Multiply, Add, Dense
 from keras.models import Input
 from keras.models import Model
 
-from architectures import get_network_by_name
+from .architectures import get_network_by_name
 from ...utils.config import load_config
 
 config = load_config('global_config.yaml')
