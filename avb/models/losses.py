@@ -1,4 +1,7 @@
+from __future__ import absolute_import
+
 import keras.backend as ker
+
 from keras.layers import Layer
 from keras.losses import binary_crossentropy
 from numpy import prod
