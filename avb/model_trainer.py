@@ -28,7 +28,14 @@ class ModelTrainer(object):
         self.model = model
         self.overwrite = overwrite
         self.experiment_name = experiment_name
-        self.model_dirname = os.path.join(config['models_dir'], self.experiment_name)
+        self.model_name = model.name
+        if self.overwrite:
+            self.experiment_dir = os.path.join(config['output_dir'], self.model_name, self.experiment_name)
+        else:
+            self.experiment_dir = os.path.join(config['output_dir'], self.model_name,
+                                               self.experiment_name + '_{}'.format(datetime.now().isoformat()))
+        if not os.path.exists(self.experiment_dir):
+            os.makedirs(self.experiment_dir)
         self.checkpoint_best = checkpoint_best
 
     def get_model(self):
@@ -65,36 +72,26 @@ class ModelTrainer(object):
         Returns:
             In-place method.
         """
-        if self.overwrite:
-            model_dirname = os.path.join(config['models_dir'], self.experiment_name)
-        else:
-            model_dirname = os.path.join(config['models_dir'],
-                                         self.experiment_name + '_{}'.format(datetime.now().isoformat()))
         try:
-            if not os.path.exists(model_dirname):
-                os.makedirs(model_dirname)
-
             checkpoints = [fname for fname in os.listdir(config['temp_dir']) if 'interrupted' not in fname]
             if self.checkpoint_best:
                 best_checkpoint = checkpoints[asscalar(argmin([float(fname.split('_')[3]) for fname in checkpoints]))]
                 tmp_model_dirname = os.path.join(config['temp_dir'], best_checkpoint)
                 for f in os.listdir(tmp_model_dirname):
                     if f.endswith('.h5'):
-                        shutil.move(os.path.join(tmp_model_dirname, f), os.path.join(model_dirname, f))
+                        shutil.move(os.path.join(tmp_model_dirname, f), os.path.join(self.experiment_dir, f))
         except IOError:
             logger.error("Saving model in model directory failed miserably.")
         try:
             # save some meta info related to the training and experiment:
-            with open(os.path.join(model_dirname, 'meta.txt'), 'w') as f:
+            with open(os.path.join(self.experiment_dir, 'meta.txt'), 'w') as f:
                 f.write('Training on {} started on {} and finished on {}'.format(self.experiment_name,
                                                                                  training_starttime,
                                                                                  datetime.now().isoformat()))
             if loss_history is not None:
-                savez(os.path.join(model_dirname, 'loss.npz'), **loss_history)
+                savez(os.path.join(self.experiment_dir, 'loss.npz'), **loss_history)
         except IOError:
             logger.error("Saving train history and other meta-information failed.")
-
-        return model_dirname
 
     def run_training(self, data, batch_size=32, epochs=1, save_interrupted=False):
         """
@@ -113,19 +110,19 @@ class ModelTrainer(object):
         loss_history = None
         try:
             loss_history = self.fit_model(data, batch_size, epochs)
-            endmodel_dir = os.path.join(self.model_dirname, 'final')
+            endmodel_dir = os.path.join(self.experiment_dir, 'final')
             self.model.save(endmodel_dir, deployable_models_only=False, save_metainfo=True)
         except KeyboardInterrupt:
             if save_interrupted:
-                interrupted_dir = os.path.join(self.model_dirname, 'interrupted_{}'.format(datetime.now().isoformat()))
+                interrupted_dir = os.path.join(self.experiment_dir, 'interrupted_{}'.format(datetime.now().isoformat()))
                 self.model.save(interrupted_dir, deployable_models_only=False, save_metainfo=True)
                 logger.warning("Training has been interrupted and the models "
                                "have been dumped in {}. Exiting program.".format(interrupted_dir))
             else:
                 logger.warning("Training has been interrupted.")
         finally:
-            model_dirname = self.finalise_training(training_starttime, loss_history)
-            return model_dirname
+            self.finalise_training(training_starttime, loss_history)
+            return self.experiment_dir
 
     def fit_model(self, data, batch_size, epochs):
         """

@@ -49,6 +49,7 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
                             'trainable': {'avb_trainable_discriminator': None, 'avb_trainable_encoder_decoder': None}}
 
         if use_adaptive_contrast:
+            self.name = "avb_with_ac"
             self.noise_basis_dim = noise_basis_dim
             self.encoder = MomentEstimationEncoder(data_dim=data_dim, noise_dim=noise_dim,
                                                    noise_basis_dim=noise_basis_dim, latent_dim=latent_dim,
@@ -56,6 +57,7 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
             self.discriminator = AdaptivePriorDiscriminator(data_dim=data_dim, latent_dim=latent_dim,
                                                             network_architecture=experiment_architecture)
         else:
+            self.name = "avb"
             self.encoder = StandardEncoder(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
                                            network_architecture=experiment_architecture)
             self.discriminator = Discriminator(data_dim=data_dim, latent_dim=latent_dim,

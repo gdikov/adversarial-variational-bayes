@@ -26,6 +26,7 @@ class GaussianVariationalAutoencoder(BaseVariationalAutoencoder):
             experiment_architecture: str, network architecture descriptor
             optimiser_params: dict, optional optimiser parameters
         """
+        self.name = "gaussian_vae"
         self.encoder = ReparametrisedGaussianEncoder(data_dim=data_dim, noise_dim=latent_dim, latent_dim=latent_dim,
                                                      network_architecture=experiment_architecture)
         self.decoder = Decoder(data_dim=data_dim, latent_dim=latent_dim, network_architecture=experiment_architecture)
