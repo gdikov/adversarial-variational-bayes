@@ -40,25 +40,12 @@ def load_mnist(local_data_path=None, one_hot=True, binarised=True):
             threshold = kwargs.get('threshold', 0.5)
             return (raw_data > threshold).astype(np.int32)
 
-    # if binarised:
-    #     binarized_mnist_path = os.path.join(PROJECT_DATA_DIR, 'binarized_MNIST')
-    #     if local_data_path is None and not os.path.exists(binarized_mnist_path):
-    #         logger.info("Downloading binarized MNIST dataset.")
-    #         datafiles = ["http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_train.amat",
-    #                      "http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_valid.amat",
-    #                      "http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_test.amat"]
-    #         os.makedirs(binarized_mnist_path)
-    #         for url_to_dataset, split in zip(datafiles, ['train']):#, 'validation', 'test']):
-    #             downloaded_data = np.loadtxt(urllib2.urlopen(url_to_dataset))
-    #             np.save(os.path.join(binarized_mnist_path, '{}.npy'.format(split)), downloaded_data)
-    #     mnist_data = []
-    #     logger.info("Loading binarized MNIST dataset.")
-    #     for dataset in ['train.npy']:# 'test.npy', 'validation.npy']:
-    #         mnist_data.append(np.load(os.path.join(binarized_mnist_path, dataset)))
-    #     mnist_data = np.concatenate(mnist_data, axis=0)
-    #     # digit_distribution = [6903, 7877, 6990, 7141, 6824, 6313, 6876, 7293, 6825, 6958]
-    #     # mnist_targets = np.concatenate([np.repeat(i, n) for i, n in enumerate(digit_distribution)])
-    #     mnist_binarized = {'data': mnist_data, 'target': None}
+    # For the binarised MNIST dataset one can use the original version from:
+    #       http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_train.amat
+    #       http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_valid.amat
+    #       http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_test.amat
+    #
+    # However this dataset does not contain label information and hence it is better go binarise it manually.
 
     mnist_path = os.path.join(PROJECT_DATA_DIR, "MNIST")
     if local_data_path is None and not os.path.exists(mnist_path):

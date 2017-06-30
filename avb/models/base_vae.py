@@ -4,7 +4,7 @@ from six import iteritems
 import numpy as np
 import os
 
-from keras.models import Model, Input, model_from_json
+from keras.models import Model, Input, load_model
 from scipy.stats import norm as standard_gaussian
 
 from ..utils.config import load_config
@@ -34,7 +34,11 @@ class BaseVariationalAutoencoder(object):
         self.latent_dim = latent_dim
         name_prefix = name_prefix or 'base_vae'
         if resume_from is not None:
-            self.load(resume_from, deployable_models_only)
+            from avb.models.losses import VAELossLayer, AVBEncoderDecoderLossLayer, AVBDiscriminatorLossLayer
+            self.load(resume_from, deployable_models_only,
+                      custom_layers={'VAELossLayer': VAELossLayer,
+                                     'AVBEncoderDecoderLossLayer': AVBEncoderDecoderLossLayer,
+                                     'AVBDiscriminatorLossLayer': AVBDiscriminatorLossLayer})
         else:
             if not hasattr(self, 'encoder') and hasattr(self, 'decoder'):
                 raise AttributeError("Initialise the attributes `encoder` and `decoder` in the child classes first!")
@@ -162,7 +166,7 @@ class BaseVariationalAutoencoder(object):
             for name, model in iteritems(self.models_dict['trainable']):
                 model.save(os.path.join(dirname, '{}.h5'.format(name)), include_optimizer=True)
         for name, model in iteritems(self.models_dict['deployable']):
-            model.save_weights(os.path.join(dirname, '{}.h5'.format(name)))
+            model.save(os.path.join(dirname, '{}.h5'.format(name)), include_optimizer=False)
 
         if save_metainfo:
             for model_type in self.models_dict.keys():
@@ -170,13 +174,14 @@ class BaseVariationalAutoencoder(object):
                     with open(os.path.join(dirname, '{}.json'.format(name)), 'w') as f:
                         f.write(model.to_json())
 
-    def load(self, dirname, deployable_models_only=False):
+    def load(self, dirname, deployable_models_only=False, custom_layers=None):
         """
         Load models from json and h5 files for deployment or training.
         
         Args:
             dirname: str, the path to the models directory
             deployable_models_only: bool, whether only models for inference and generation should be loaded
+            custom_layers: dict, custom Keras layers (e.g. loss layers)
 
         Returns:
 
@@ -184,19 +189,11 @@ class BaseVariationalAutoencoder(object):
         if not hasattr(self, 'models_dict'):
             raise AttributeError("Initialise the model dict in the child class first!")
 
-        restorable_models = os.listdir(dirname)
-
         def load_model_type(model_type):
             for name in self.models_dict[model_type].keys():
-                filename = name + '.json'
-                if filename in restorable_models:
-                    with open(os.path.join(dirname, filename), 'r') as json_file:
-                        model = model_from_json(json_file.read())
-                        setattr(self, name, model)
-                    loadable_model = getattr(self, name)
-                    loadable_model.load_weights(os.path.join(dirname, '{}.h5'.format(name)))
-                else:
-                    ValueError("Could not find model definition for {} in {}".format(name, restorable_models))
+                loadable_model = load_model(os.path.join(dirname, '{}.h5'.format(name)),
+                                            custom_objects=custom_layers)
+                setattr(self, name, loadable_model)
 
         if not deployable_models_only:
             load_model_type(model_type='trainable')

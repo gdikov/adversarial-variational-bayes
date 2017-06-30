@@ -66,7 +66,7 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
                                network_architecture=experiment_architecture)
 
         super(AdversarialVariationalBayes, self).__init__(data_dim=data_dim, noise_dim=noise_dim,
-                                                          latent_dim=latent_dim, name_prefix='avb',
+                                                          latent_dim=latent_dim, name_prefix=self.name,
                                                           resume_from=resume_from,
                                                           deployable_models_only=deployable_models_only)
         if resume_from is None:

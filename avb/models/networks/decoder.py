@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 import logging
-from tensorflow.contrib.distributions import Bernoulli
+
 from keras.layers import Lambda, Dense
 from keras.models import Model, Input
 
@@ -65,8 +65,13 @@ class Decoder(BaseDecoder):
         # a probability clipping is necessary for the Bernoulli `log_prob` property produces NaNs in the border cases.
         sampler_params = Lambda(lambda x: 1e-6 + (1 - 2e-6) * x, name='dec_probs_clipper')(sampler_params)
 
-        log_probs = Lambda(lambda x: Bernoulli(probs=x[0], name='dec_bernoulli').log_prob(x[1]),
-                           name='dec_bernoulli_logprob')([sampler_params, self.data_input])
+        def bernoulli_log_probs(args):
+            from tensorflow.contrib.distributions import Bernoulli
+            mu, x = args
+            log_px = Bernoulli(probs=mu, name='dec_bernoulli').log_prob(x)
+            return log_px
+
+        log_probs = Lambda(bernoulli_log_probs, name='dec_bernoulli_logprob')([sampler_params, self.data_input])
 
         self.generator = Model(inputs=self.latent_input, outputs=sampler_params, name='dec_sampling')
         self.ll_estimator = Model(inputs=[self.data_input, self.latent_input], outputs=log_probs, name='dec_trainable')

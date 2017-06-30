@@ -16,6 +16,31 @@ config = load_config('global_config.yaml')
 logger = logging.getLogger(__name__)
 
 
+def sample_standard_normal_noise(inputs, **kwargs):
+    from keras.backend import shape, random_normal
+    n_samples = kwargs.get('n_samples', shape(inputs)[0])
+    n_basis_noise_vectors = kwargs.get('n_basis', -1)
+    data_dim = kwargs.get('data_dim', 1)
+    noise_dim = kwargs.get('noise_dim', data_dim)
+    seed = kwargs.get('seed', 7)
+
+    if n_basis_noise_vectors > 0:
+        samples_isotropic = random_normal(shape=(n_samples, n_basis_noise_vectors, noise_dim),
+                                          mean=0, stddev=1, seed=seed)
+    else:
+        samples_isotropic = random_normal(shape=(n_samples, noise_dim),
+                                          mean=0, stddev=1, seed=seed)
+    op_mode = kwargs.get('mode', 'none')
+    if op_mode == 'concatenate':
+        concat = Concatenate(axis=1, name='enc_noise_concatenation')([inputs, samples_isotropic])
+        return concat
+    elif op_mode == 'add':
+        resized_noise = Dense(data_dim, activation=None, name='enc_resized_noise_sampler')(samples_isotropic)
+        added_noise_data = Add(name='enc_adding_noise_data')([inputs, resized_noise])
+        return added_noise_data
+    return samples_isotropic
+
+
 class BaseEncoder(object):
     def __init__(self, data_dim, noise_dim, latent_dim, network_architecture='synthetic', name='encoder'):
         logger.info("Initialising {} model with {}-dimensional data and {}-dimensional noise input "
@@ -26,27 +51,8 @@ class BaseEncoder(object):
         self.latent_dim = latent_dim
         self.network_architecture = network_architecture
         self.data_input = Input(shape=(data_dim,), name='enc_data_input')
-        self.standard_normal_sampler = Lambda(self.sample_standard_normal_noise, name='enc_standard_normal_sampler')
-        self.standard_normal_sampler2 = Lambda(self.sample_standard_normal_noise, name='enc_standard_normal_sampler2')
-
-    def sample_standard_normal_noise(self, inputs, **kwargs):
-        n_samples = kwargs.get('n_samples', ker.shape(inputs)[0])
-        n_basis_noise_vectors = kwargs.get('n_basis', -1)
-        if n_basis_noise_vectors > 0:
-            samples_isotropic = ker.random_normal(shape=(n_samples, n_basis_noise_vectors, self.noise_dim),
-                                                  mean=0, stddev=1, seed=config['seed'])
-        else:
-            samples_isotropic = ker.random_normal(shape=(n_samples, self.noise_dim),
-                                                  mean=0, stddev=1, seed=config['seed'])
-        op_mode = kwargs.get('mode', 'none')
-        if op_mode == 'concatenate':
-            concat = Concatenate(axis=1, name='enc_noise_concatenation')([inputs, samples_isotropic])
-            return concat
-        elif op_mode == 'add':
-            resized_noise = Dense(self.data_dim, activation=None, name='enc_resized_noise_sampler')(samples_isotropic)
-            added_noise_data = Add(name='enc_adding_noise_data')([inputs, resized_noise])
-            return added_noise_data
-        return samples_isotropic
+        self.standard_normal_sampler = Lambda(sample_standard_normal_noise, name='enc_standard_normal_sampler')
+        self.standard_normal_sampler2 = Lambda(sample_standard_normal_noise, name='enc_standard_normal_sampler2')
 
     def __call__(self, *args, **kwargs):
         return None
@@ -243,9 +249,21 @@ class ReparametrisedGaussianEncoder(BaseEncoder):
 
         latent_mean, latent_log_var = get_network_by_name['reparametrised_encoder'][network_architecture](
             self.data_input, latent_dim)
+        self.standard_normal_sampler.arguments = {'noise_dim': self.noise_dim,
+                                                  'data_dim': self.data_dim,
+                                                  'seed': config['seed']}
 
         noise = self.standard_normal_sampler(self.data_input)
-        latent_factors = Lambda(lambda x: x[0] + ker.exp(x[1] / 2.0) * x[2],
+
+        # due to some BUG in Keras, the module name `ker` is not visible within the lambda expression
+        # as a workaround, define the function outside the Lambda layer
+        def lin_transform_standard_gaussian(params):
+            from keras.backend import exp
+            mu, log_sigma, z = params
+            transformed_z = mu + exp(log_sigma / 2.0) * z
+            return transformed_z
+
+        latent_factors = Lambda(lin_transform_standard_gaussian,
                                 name='enc_reparametrised_latent')([latent_mean, latent_log_var, noise])
 
         self.encoder_inference_model = Model(inputs=self.data_input, outputs=latent_factors, name='encoder_inference')
@@ -267,8 +285,8 @@ class ReparametrisedGaussianEncoder(BaseEncoder):
         Returns:
             An Encoder model.
         """
-        is_learninig = kwargs.get('is_learning', True)
-        if is_learninig:
+        is_learning = kwargs.get('is_learning', True)
+        if is_learning:
             return self.encoder_learning_model(args[0])
         else:
             return self.encoder_inference_model(args[0])
