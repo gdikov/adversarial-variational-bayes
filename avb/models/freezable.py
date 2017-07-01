@@ -9,18 +9,18 @@ logger = logging.getLogger(__name__)
 
 class FreezableModel(Model):
     """
-    A Keras model which supports layer freezing, i.e. making them untrainable, before compilation. 
-    This is useful in alternating model optimisation, when it consists of multiple sub-models. 
+    A Keras model which supports layer freezing, i.e. making them untrainable, before compilation.
+    This is useful in alternating model optimisation, when it consists of multiple sub-models.
     """
     def __init__(self, inputs, outputs, name='freezable'):
         """
         Args:
-            inputs: the inputs of the model 
+            inputs: the inputs of the model
             outputs: the outputs of the model
             name: str, the name of the model
         """
         super(FreezableModel, self).__init__(inputs=inputs, outputs=outputs, name=name)
-        self._trainable_layers = []
+        self._trainable_layers = None
 
     def _crawl_trainable_layers(self, freezable_layers_prefix, deep_freeze=True):
         """
@@ -62,9 +62,8 @@ class FreezableModel(Model):
         Returns:
             A list of all trainable layers in the model.
         """
-        if not hasattr(self, '_trainable_layers'):
-            trainable_layers = self._crawl_trainable_layers(freezable_layers_prefix, deep_crawl)
-            setattr(self, '_trainable_layers', trainable_layers)
+        if self._trainable_layers is None:
+            self._trainable_layers = self._crawl_trainable_layers(freezable_layers_prefix, deep_crawl)
             return self._trainable_layers
         else:
             return self._trainable_layers
@@ -80,8 +79,9 @@ class FreezableModel(Model):
         Returns:
             In-place method.
         """
-        trainable_layers = self.get_trainable_layers(freezable_layers_prefix, deep_freeze)
-        for layer in trainable_layers:
+        if self._trainable_layers is None:
+            self._trainable_layers = self._crawl_trainable_layers(freezable_layers_prefix, deep_freeze)
+        for layer in self._trainable_layers:
             layer.trainable = False
 
     def unfreeze(self, unfreezable_layers_prefix=None, deep_unfreeze=True):
@@ -91,10 +91,11 @@ class FreezableModel(Model):
         Args:
             unfreezable_layers_prefix: str, a prefix of the layer/sub-model names which will be frozen before compilation.
             deep_unfreeze: bool, whether the layers of the model and its sub-models should be recursively frozen or not.
-        
+
         Returns:
             In-place method.
         """
-        trainable_layers = self.get_trainable_layers(unfreezable_layers_prefix, deep_unfreeze)
-        for layer in trainable_layers:
+        if self._trainable_layers is None:
+            self._trainable_layers = self._crawl_trainable_layers(unfreezable_layers_prefix, deep_unfreeze)
+        for layer in self._trainable_layers:
             layer.trainable = True

@@ -3,7 +3,7 @@ from builtins import range, next
 
 import numpy as np
 import os
-from keras.optimizers import Adam, RMSprop
+from keras.optimizers import Adam
 from tqdm import tqdm
 
 from ..utils.config import load_config
@@ -45,8 +45,7 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
         self.noise_dim = noise_dim or data_dim
         self.latent_dim = latent_dim
 
-        self.models_dict = {'deployable': {'inference_model': None, 'generative_model': None},
-                            'trainable': {'avb_trainable_discriminator': None, 'avb_trainable_encoder_decoder': None}}
+        self.models_dict = {'avb_trainable_discriminator': None, 'avb_trainable_encoder_decoder': None}
 
         if use_adaptive_contrast:
             self.name = "avb_with_ac"
@@ -67,9 +66,12 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
 
         super(AdversarialVariationalBayes, self).__init__(data_dim=data_dim, noise_dim=noise_dim,
                                                           latent_dim=latent_dim, name_prefix=self.name,
-                                                          resume_from=resume_from,
-                                                          deployable_models_only=deployable_models_only)
-        if resume_from is None:
+                                                          resume_from=resume_from)
+        if resume_from is not None:
+            if not deployable_models_only:
+                self.models_dict['avb_trainable_encoder_decoder'] = self.avb_trainable_encoder_decoder
+                self.models_dict['avb_trainable_discriminator'] = self.avb_trainable_discriminator
+        else:
             if use_adaptive_contrast:
                 posterior_approximation, norm_posterior_approximation, \
                     posterior_mean, posterior_var, log_adaptive_prior, log_latent_space = \
@@ -124,8 +126,8 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
             optimiser_params_disc = optimiser_params['disc']
             self.avb_trainable_discriminator.compile(optimizer=Adam(**optimiser_params_disc), loss=None)
 
-        self.models_dict['trainable']['avb_trainable_encoder_decoder'] = self.avb_trainable_encoder_decoder
-        self.models_dict['trainable']['avb_trainable_discriminator'] = self.avb_trainable_discriminator
+            self.models_dict['avb_trainable_encoder_decoder'] = self.avb_trainable_encoder_decoder
+            self.models_dict['avb_trainable_discriminator'] = self.avb_trainable_discriminator
 
         self.data_iterator = AVBDataIterator(data_dim=data_dim, latent_dim=latent_dim,
                                              seed=config['seed'])
@@ -170,8 +172,7 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
                 current_epoch_loss = np.mean(epoch_loss_history_encdec) + np.mean(epoch_loss_history_disc)
                 if current_epoch_loss < 0.9 * epoch_loss:
                     epoch_loss = current_epoch_loss
-                    self.save(os.path.join(config['temp_dir'], 'ep_{}_loss_{}'.format(ep, epoch_loss)),
-                              deployable_models_only=False)
+                    self.save(os.path.join(config['temp_dir'], 'ep_{}_loss_{}'.format(ep, epoch_loss)))
             history['encoderdecoder_loss'].append(epoch_loss_history_encdec)
             history['discriminator_loss'].append(epoch_loss_history_disc)
 

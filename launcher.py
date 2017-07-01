@@ -6,6 +6,7 @@ from avb.model_trainer import AVBModelTrainer, VAEModelTrainer
 from avb.utils.datasets import load_npoints, load_mnist
 from avb.utils.logger import logger
 
+from keras.backend import clear_session
 # import tensorflow as tf
 # from keras.backend.tensorflow_backend import set_session
 # config = tf.ConfigProto()
@@ -22,23 +23,23 @@ def run_synthetic_experiment(model='vae', pretrained_model=None):
 
     if model == 'vae':
         trainer = VAEModelTrainer(data_dim=data_dim, latent_dim=2, experiment_name='synthetic', overwrite=True,
-                                  optimiser_params={'lr': 0.001}, pretrained_dir=pretrained_model, test_only=True)
+                                  optimiser_params={'lr': 0.001}, pretrained_dir=pretrained_model)
     elif model == 'avb':
         trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=2, noise_dim=data_dim, experiment_name='synthetic',
                                   overwrite=True, use_adaptive_contrast=False,
                                   optimiser_params={'encdec': {'lr': 0.0008, 'beta_1': 0.5},
                                                     'disc': {'lr': 0.0008, 'beta_1': 0.5}},
-                                  pretrained_dir=pretrained_model, test_only=False)
+                                  pretrained_dir=pretrained_model)
     elif model == 'avb+ac':
         trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=2, noise_dim=data_dim, noise_basis_dim=8,
                                   experiment_name='synthetic',  overwrite=True, use_adaptive_contrast=True,
                                   optimiser_params={'encdec': {'lr': 0.0001, 'beta_1': 0.5},
                                                     'disc': {'lr': 0.0002, 'beta_1': 0.5}},
-                                  pretrained_dir=pretrained_model, test_only=True)
+                                  pretrained_dir=pretrained_model)
     else:
         raise ValueError('Unknown model type. Supported models: `vae`, `avb` and `avb+ac`.')
 
-    model_dir = trainer.run_training(train_data, batch_size=400, epochs=4000)
+    model_dir = trainer.run_training(train_data, batch_size=400, epochs=100)
     # model_dir = "output/"
     trained_model = trainer.get_model()
 
@@ -57,6 +58,8 @@ def run_synthetic_experiment(model='vae', pretrained_model=None):
     generations = trained_model.generate(n_samples=100, batch_size=100)
     save_array(path_join(model_dir, 'generated_samples.npy'), generations)
     plot_sampled_data(generations, fig_dirpath=model_dir)
+
+    clear_session()
     return model_dir
 
 
@@ -111,4 +114,4 @@ def run_mnist_experiment(model='vae'):
 
 
 if __name__ == '__main__':
-    run_synthetic_experiment('avb')#, pretrained_model='output/avb/synthetic/final')
+    run_synthetic_experiment('vae')#, pretrained_model='output/gaussian_vae/synthetic/final')

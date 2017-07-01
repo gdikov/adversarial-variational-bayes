@@ -15,31 +15,31 @@ config = load_config('global_config.yaml')
 
 
 class GaussianVariationalAutoencoder(BaseVariationalAutoencoder):
-    def __init__(self, data_dim, latent_dim, resume_from=None, deployable_models_only=False,
+    def __init__(self, data_dim, latent_dim, resume_from=None,
                  experiment_architecture='synthetic', optimiser_params=None):
         """
         Args:
             data_dim: int, flattened data dimensionality 
             latent_dim: int, flattened latent dimensionality
-            resume_from: str, optional folder name with pre-trained models 
-            deployable_models_only: bool, whether only the inference and generative models should be instantiated
+            resume_from: str, optional folder name with pre-trained models
             experiment_architecture: str, network architecture descriptor
             optimiser_params: dict, optional optimiser parameters
         """
         self.name = "gaussian_vae"
-        self.encoder = ReparametrisedGaussianEncoder(data_dim=data_dim, noise_dim=latent_dim, latent_dim=latent_dim,
-                                                     network_architecture=experiment_architecture)
-        self.decoder = Decoder(data_dim=data_dim, latent_dim=latent_dim, network_architecture=experiment_architecture)
-        self.models_dict = {'deployable': {'inference_model': None, 'generative_model': None},
-                            'trainable': {'vae_model': None}}
-        # init the base class' inputs and deployable models and reuse them in the paer
+        self.models_dict = {'vae_model': None}
+
+        if resume_from is None:
+            self.encoder = ReparametrisedGaussianEncoder(data_dim=data_dim, noise_dim=latent_dim, latent_dim=latent_dim,
+                                                         network_architecture=experiment_architecture)
+            self.decoder = Decoder(data_dim=data_dim, latent_dim=latent_dim,
+                                   network_architecture=experiment_architecture)
+
+        # init the base class' inputs and testing models and reuse them
         super(GaussianVariationalAutoencoder, self).__init__(data_dim=data_dim, noise_dim=latent_dim,
                                                              latent_dim=latent_dim, name_prefix=self.name,
-                                                             resume_from=resume_from,
-                                                             deployable_models_only=deployable_models_only)
+                                                             resume_from=resume_from)
         if resume_from is not None:
-            if not deployable_models_only:
-                self.models_dict['trainable']['vae_model'] = self.vae_model
+            self.models_dict['vae_model'] = self.vae_model
         else:
             posterior_approximation, latent_mean, latent_log_var = self.encoder(self.data_input, is_learning=True)
             reconstruction_log_likelihood = self.decoder([self.data_input, posterior_approximation], is_learning=True)
@@ -47,7 +47,7 @@ class GaussianVariationalAutoencoder(BaseVariationalAutoencoder):
             optimiser_params = optimiser_params or {'lr': 1e-3}
             self.vae_model = Model(inputs=self.data_input, outputs=vae_loss)
             self.vae_model.compile(optimizer=RMSprop(**optimiser_params), loss=None)
-            self.models_dict['trainable']['vae_model'] = self.vae_model
+            self.models_dict['vae_model'] = self.vae_model
 
         self.data_iterator = VAEDataIterator(data_dim=data_dim, latent_dim=latent_dim, seed=config['seed'])
 

@@ -4,7 +4,7 @@ from six import iteritems
 import numpy as np
 import os
 
-from keras.models import Model, Input, load_model
+from keras.models import Model, Input, load_model, model_from_json
 from scipy.stats import norm as standard_gaussian
 
 from ..utils.config import load_config
@@ -18,15 +18,13 @@ class BaseVariationalAutoencoder(object):
     Base class for the Adversarial Variational Bayes Autoencoder and the vanilla Variational Autoencoder.
     """
 
-    def __init__(self, data_dim, latent_dim=2, noise_dim=None, resume_from=None,
-                 deployable_models_only=False, name_prefix=None):
+    def __init__(self, data_dim, latent_dim=2, noise_dim=None, resume_from=None, name_prefix=None):
         """
         Args:
             data_dim: int, flattened data dimensionality
             latent_dim: int, flattened latent dimensionality
             noise_dim: int, flattened noise, dimensionality
             resume_from: str, directory with h5 and json files with the model weights and architectures
-            deployable_models_only: bool, whether only deployable models for inference and generation should be restored
             name_prefix: str, the prefix of named layers
         """
         self.data_dim = data_dim
@@ -36,11 +34,10 @@ class BaseVariationalAutoencoder(object):
         if resume_from is not None:
             from avb.models.losses import VAELossLayer, AVBEncoderDecoderLossLayer, AVBDiscriminatorLossLayer
             from avb.models import FreezableModel
-            self.load(resume_from, deployable_models_only,
-                      custom_layers={'VAELossLayer': VAELossLayer,
-                                     'AVBEncoderDecoderLossLayer': AVBEncoderDecoderLossLayer,
-                                     'AVBDiscriminatorLossLayer': AVBDiscriminatorLossLayer,
-                                     'FreezableModel': FreezableModel})
+            self.load(resume_from, custom_layers={'VAELossLayer': VAELossLayer,
+                                                  'AVBEncoderDecoderLossLayer': AVBEncoderDecoderLossLayer,
+                                                  'AVBDiscriminatorLossLayer': AVBDiscriminatorLossLayer,
+                                                  'FreezableModel': FreezableModel})
         else:
             if not hasattr(self, 'encoder') and hasattr(self, 'decoder'):
                 raise AttributeError("Initialise the attributes `encoder` and `decoder` in the child classes first!")
@@ -48,13 +45,11 @@ class BaseVariationalAutoencoder(object):
             self.data_input = Input(shape=(data_dim,), name='{}_data_input'.format(name_prefix))
             self.latent_input = Input(shape=(latent_dim,), name='{}_latent_prior_input'.format(name_prefix))
 
-            # define the deployable models (for evaluation purposes only)
+            # define the testing models
             self.inference_model = Model(inputs=self.data_input, outputs=self.encoder(self.data_input,
                                                                                       is_learning=False))
             self.generative_model = Model(inputs=self.latent_input, outputs=self.decoder(self.latent_input,
                                                                                          is_learning=False))
-            self.models_dict['deployable']['inference_model'] = self.inference_model
-            self.models_dict['deployable']['generative_model'] = self.generative_model
 
     def fit(self, data, batch_size=32, epochs=1, **kwargs):
         """
@@ -147,56 +142,38 @@ class BaseVariationalAutoencoder(object):
         reconstructed_samples = self.generate(batch_size=batch_size, latent_samples=latent_samples, return_probs=True)
         return reconstructed_samples
 
-    def save(self, dirname, deployable_models_only=False, save_metainfo=False):
+    def save(self, dirname):
         """
         Save the weights of all AVB sub-models, so that training can be resumed. 
 
         Args:
             dirname: str, path to the folder to store the weights
-            deployable_models_only: bool, whether only inference and generative models should be stored
-            save_metainfo: whether model architectures should be stored too.
 
         Returns:
-
+            In-place method.
         """
         if not hasattr(self, 'models_dict'):
             raise AttributeError("Initialise the model dict in the child class first!")
 
         if not os.path.exists(dirname):
             os.makedirs(dirname)
-        if not deployable_models_only:
-            for name, model in iteritems(self.models_dict['trainable']):
-                model.save(os.path.join(dirname, '{}.h5'.format(name)), include_optimizer=True)
-        for name, model in iteritems(self.models_dict['deployable']):
-            model.save(os.path.join(dirname, '{}.h5'.format(name)), include_optimizer=False)
+        for name, model in iteritems(self.models_dict):
+            model.save(os.path.join(dirname, '{}.h5'.format(name)), include_optimizer=True, overwrite=True)
 
-        if save_metainfo:
-            for model_type in self.models_dict.keys():
-                for name, model in iteritems(self.models_dict[model_type]):
-                    with open(os.path.join(dirname, '{}.json'.format(name)), 'w') as f:
-                        f.write(model.to_json())
-
-    def load(self, dirname, deployable_models_only=False, custom_layers=None):
+    def load(self, dirname, custom_layers=None):
         """
-        Load models from json and h5 files for deployment or training.
+        Load models from json and h5 files for testing or training.
         
         Args:
             dirname: str, the path to the models directory
-            deployable_models_only: bool, whether only models for inference and generation should be loaded
             custom_layers: dict, custom Keras layers (e.g. loss layers)
 
         Returns:
-
+            In-place method.
         """
         if not hasattr(self, 'models_dict'):
             raise AttributeError("Initialise the model dict in the child class first!")
 
-        def load_model_type(model_type):
-            for name in self.models_dict[model_type].keys():
-                loadable_model = load_model(os.path.join(dirname, '{}.h5'.format(name)),
-                                            custom_objects=custom_layers)
-                setattr(self, name, loadable_model)
-
-        if not deployable_models_only:
-            load_model_type(model_type='trainable')
-        load_model_type(model_type='deployable')
+        for name in self.models_dict.keys():
+            loadable_model = load_model(os.path.join(dirname, '{}.h5'.format(name)), custom_objects=custom_layers)
+            setattr(self, name, loadable_model)

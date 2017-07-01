@@ -111,11 +111,11 @@ class ModelTrainer(object):
         try:
             loss_history = self.fit_model(data, batch_size, epochs)
             endmodel_dir = os.path.join(self.experiment_dir, 'final')
-            self.model.save(endmodel_dir, deployable_models_only=False)
+            self.model.save(endmodel_dir)
         except KeyboardInterrupt:
             if save_interrupted:
                 interrupted_dir = os.path.join(self.experiment_dir, 'interrupted_{}'.format(datetime.now().isoformat()))
-                self.model.save(interrupted_dir, deployable_models_only=False)
+                self.model.save(interrupted_dir)
                 logger.warning("Training has been interrupted and the models "
                                "have been dumped in {}. Exiting program.".format(interrupted_dir))
             else:
@@ -144,7 +144,7 @@ class AVBModelTrainer(ModelTrainer):
     ModelTrainer instance for the AVBModel.
     """
     def __init__(self, data_dim, latent_dim, noise_dim, experiment_name, schedule=None,
-                 pretrained_dir=None, test_only=False, overwrite=True, use_adaptive_contrast=False,
+                 pretrained_dir=None, overwrite=True, use_adaptive_contrast=False,
                  noise_basis_dim=None, optimiser_params=None):
         """
         Args:
@@ -158,14 +158,12 @@ class AVBModelTrainer(ModelTrainer):
             noise_basis_dim: int, the dimensionality of the noise basis vectors if AC is used.
             optimiser_params: dict, parameters for the optimiser
             pretrained_dir: str, directory from which pre-trained models (hdf5 files) can be loaded
-            test_only: bool, whether to load only test-mode only models
         """
         avb = AdversarialVariationalBayes(data_dim=data_dim, latent_dim=latent_dim, noise_dim=noise_dim,
                                           noise_basis_dim=noise_basis_dim,
                                           use_adaptive_contrast=use_adaptive_contrast,
                                           optimiser_params=optimiser_params,
                                           resume_from=pretrained_dir,
-                                          deployable_models_only=test_only,
                                           experiment_architecture=experiment_name)
         self.schedule = schedule or {'iter_discr': 1, 'iter_encdec': 1}
         super(AVBModelTrainer, self).__init__(model=avb, experiment_name=experiment_name, overwrite=overwrite)
@@ -196,7 +194,7 @@ class VAEModelTrainer(ModelTrainer):
     """
 
     def __init__(self, data_dim, latent_dim, experiment_name, overwrite=True,
-                 optimiser_params=None, pretrained_dir=None, test_only=False):
+                 optimiser_params=None, pretrained_dir=None):
         """
         Args:
             data_dim: int, flattened data dimensionality 
@@ -205,13 +203,11 @@ class VAEModelTrainer(ModelTrainer):
             overwrite: bool, whether to overwrite the existing trained model with the same experiment_name
             optimiser_params: dict, parameters for the optimiser
             pretrained_dir: str, optional path to the pre-trained model directory with the hdf5 and json files
-            test_only: bool, whether to load the trainable or test-mode models if `pretrained_dir` is given
         """
         vae = GaussianVariationalAutoencoder(data_dim=data_dim, latent_dim=latent_dim,
                                              experiment_architecture=experiment_name,
                                              optimiser_params=optimiser_params,
-                                             resume_from=pretrained_dir,
-                                             deployable_models_only=test_only)
+                                             resume_from=pretrained_dir)
         super(VAEModelTrainer, self).__init__(model=vae, experiment_name=experiment_name, overwrite=overwrite)
 
     def fit_model(self, data, batch_size, epochs, **kwargs):
