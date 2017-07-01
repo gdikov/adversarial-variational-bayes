@@ -4,7 +4,7 @@ from six import iteritems
 import numpy as np
 import os
 
-from keras.models import Model, Input, load_model, model_from_json
+from keras.models import Model, Input, load_model
 from scipy.stats import norm as standard_gaussian
 
 from ..utils.config import load_config
@@ -18,38 +18,30 @@ class BaseVariationalAutoencoder(object):
     Base class for the Adversarial Variational Bayes Autoencoder and the vanilla Variational Autoencoder.
     """
 
-    def __init__(self, data_dim, latent_dim=2, noise_dim=None, resume_from=None, name_prefix=None):
+    def __init__(self, data_dim, latent_dim=2, noise_dim=None, name_prefix=None):
         """
         Args:
             data_dim: int, flattened data dimensionality
             latent_dim: int, flattened latent dimensionality
             noise_dim: int, flattened noise, dimensionality
-            resume_from: str, directory with h5 and json files with the model weights and architectures
             name_prefix: str, the prefix of named layers
         """
         self.data_dim = data_dim
         self.noise_dim = noise_dim or latent_dim
         self.latent_dim = latent_dim
         name_prefix = name_prefix or 'base_vae'
-        if resume_from is not None:
-            from avb.models.losses import VAELossLayer, AVBEncoderDecoderLossLayer, AVBDiscriminatorLossLayer
-            from avb.models import FreezableModel
-            self.load(resume_from, custom_layers={'VAELossLayer': VAELossLayer,
-                                                  'AVBEncoderDecoderLossLayer': AVBEncoderDecoderLossLayer,
-                                                  'AVBDiscriminatorLossLayer': AVBDiscriminatorLossLayer,
-                                                  'FreezableModel': FreezableModel})
-        else:
-            if not hasattr(self, 'encoder') and hasattr(self, 'decoder'):
-                raise AttributeError("Initialise the attributes `encoder` and `decoder` in the child classes first!")
 
-            self.data_input = Input(shape=(data_dim,), name='{}_data_input'.format(name_prefix))
-            self.latent_input = Input(shape=(latent_dim,), name='{}_latent_prior_input'.format(name_prefix))
+        if not hasattr(self, 'encoder') and hasattr(self, 'decoder'):
+            raise AttributeError("Initialise the attributes `encoder` and `decoder` in the child classes first!")
 
-            # define the testing models
-            self.inference_model = Model(inputs=self.data_input, outputs=self.encoder(self.data_input,
-                                                                                      is_learning=False))
-            self.generative_model = Model(inputs=self.latent_input, outputs=self.decoder(self.latent_input,
-                                                                                         is_learning=False))
+        self.data_input = Input(shape=(data_dim,), name='{}_data_input'.format(name_prefix))
+        self.latent_input = Input(shape=(latent_dim,), name='{}_latent_prior_input'.format(name_prefix))
+
+        # define the testing models
+        self.inference_model = Model(inputs=self.data_input,
+                                     outputs=self.encoder(self.data_input, is_learning=False))
+        self.generative_model = Model(inputs=self.latent_input,
+                                      outputs=self.decoder(self.latent_input, is_learning=False))
 
     def fit(self, data, batch_size=32, epochs=1, **kwargs):
         """
@@ -175,5 +167,9 @@ class BaseVariationalAutoencoder(object):
             raise AttributeError("Initialise the model dict in the child class first!")
 
         for name in self.models_dict.keys():
-            loadable_model = load_model(os.path.join(dirname, '{}.h5'.format(name)), custom_objects=custom_layers)
-            setattr(self, name, loadable_model)
+            # this weights loading is not elegant but it seems that Keras is initialising the weights before training
+            # and the loaded model is becoming useless (maybe a Keras bug in saving/loading?). If fixed, this should be
+            # refactored too.
+            # NOTE: this is not loading the optimiser parameters
+            existing_model = getattr(self, name)
+            existing_model.load_weights(os.path.join(dirname, '{}.h5'.format(name)))

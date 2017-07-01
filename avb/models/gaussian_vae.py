@@ -28,27 +28,28 @@ class GaussianVariationalAutoencoder(BaseVariationalAutoencoder):
         self.name = "gaussian_vae"
         self.models_dict = {'vae_model': None}
 
-        if resume_from is None:
-            self.encoder = ReparametrisedGaussianEncoder(data_dim=data_dim, noise_dim=latent_dim, latent_dim=latent_dim,
-                                                         network_architecture=experiment_architecture)
-            self.decoder = Decoder(data_dim=data_dim, latent_dim=latent_dim,
-                                   network_architecture=experiment_architecture)
+        self.encoder = ReparametrisedGaussianEncoder(data_dim=data_dim, noise_dim=latent_dim, latent_dim=latent_dim,
+                                                     network_architecture=experiment_architecture)
+        self.decoder = Decoder(data_dim=data_dim, latent_dim=latent_dim,
+                               network_architecture=experiment_architecture)
 
         # init the base class' inputs and testing models and reuse them
         super(GaussianVariationalAutoencoder, self).__init__(data_dim=data_dim, noise_dim=latent_dim,
-                                                             latent_dim=latent_dim, name_prefix=self.name,
-                                                             resume_from=resume_from)
-        if resume_from is not None:
-            self.models_dict['vae_model'] = self.vae_model
-        else:
-            posterior_approximation, latent_mean, latent_log_var = self.encoder(self.data_input, is_learning=True)
-            reconstruction_log_likelihood = self.decoder([self.data_input, posterior_approximation], is_learning=True)
-            vae_loss = VAELossLayer(name='vae_loss')([reconstruction_log_likelihood, latent_mean, latent_log_var])
-            optimiser_params = optimiser_params or {'lr': 1e-3}
-            self.vae_model = Model(inputs=self.data_input, outputs=vae_loss)
-            self.vae_model.compile(optimizer=RMSprop(**optimiser_params), loss=None)
-            self.models_dict['vae_model'] = self.vae_model
+                                                             latent_dim=latent_dim, name_prefix=self.name)
 
+        posterior_approximation, latent_mean, latent_log_var = self.encoder(self.data_input, is_learning=True)
+        reconstruction_log_likelihood = self.decoder([self.data_input, posterior_approximation], is_learning=True)
+        vae_loss = VAELossLayer(name='vae_loss')([reconstruction_log_likelihood, latent_mean, latent_log_var])
+
+        self.vae_model = Model(inputs=self.data_input, outputs=vae_loss)
+
+        if resume_from is not None:
+            self.load(resume_from, custom_layers={'VAELossLayer': VAELossLayer})
+
+        optimiser_params = optimiser_params or {'lr': 1e-3}
+        self.vae_model.compile(optimizer=RMSprop(**optimiser_params), loss=None)
+
+        self.models_dict['vae_model'] = self.vae_model
         self.data_iterator = VAEDataIterator(data_dim=data_dim, latent_dim=latent_dim, seed=config['seed'])
 
     def fit(self, data, batch_size=32, epochs=1, **kwargs):
@@ -62,7 +63,7 @@ class GaussianVariationalAutoencoder(BaseVariationalAutoencoder):
             **kwargs: 
 
         Returns:
-
+            A training history dict.
         """
         data_iterator, batches_per_epoch = self.data_iterator.iter(data, batch_size, mode='training', shuffle=True)
 

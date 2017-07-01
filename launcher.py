@@ -39,7 +39,7 @@ def run_synthetic_experiment(model='vae', pretrained_model=None):
     else:
         raise ValueError('Unknown model type. Supported models: `vae`, `avb` and `avb+ac`.')
 
-    model_dir = trainer.run_training(train_data, batch_size=400, epochs=100)
+    model_dir = trainer.run_training(train_data, batch_size=400, epochs=500)
     # model_dir = "output/"
     trained_model = trainer.get_model()
 
@@ -114,4 +114,4 @@ def run_mnist_experiment(model='vae'):
 
 
 if __name__ == '__main__':
-    run_synthetic_experiment('vae')#, pretrained_model='output/gaussian_vae/synthetic/final')
+    run_synthetic_experiment('vae', pretrained_model='output/gaussian_vae/synthetic/final')
