@@ -1,4 +1,3 @@
-from numpy import pi as pi_const
 from keras.layers import Dense, Concatenate, Add
 
 

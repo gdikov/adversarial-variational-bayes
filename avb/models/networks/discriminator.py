@@ -24,6 +24,7 @@ class BaseDiscriminator(object):
         self.data_input = Input(shape=(data_dim,), name='disc_data_input')
         self.latent_input = Input(shape=(latent_dim,), name='disc_latent_input')
         self.prior_sampler = Lambda(sample_adaptive_normal_noise, name='disc_prior_sampler')
+        self.prior_sampler.arguments = {'latent_dim': self.latent_dim, 'seed': config['seed']}
         self.discriminator_from_prior_model = None
         self.discriminator_from_posterior_model = None
 
@@ -66,7 +67,6 @@ class Discriminator(BaseDiscriminator):
 
         discriminator_model = get_network_by_name['discriminator'][network_architecture](self.data_dim, self.latent_dim)
 
-        self.prior_sampler.arguments = {'latent_dim': self.latent_dim, 'seed': config['seed']}
         prior_distribution = self.prior_sampler(self.data_input)
         from_prior_output = discriminator_model([self.data_input, prior_distribution])
         self.discriminator_from_prior_model = Model(inputs=self.data_input, outputs=from_prior_output,

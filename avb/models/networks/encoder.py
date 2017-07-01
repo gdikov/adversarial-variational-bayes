@@ -27,8 +27,14 @@ class BaseEncoder(object):
         self.latent_dim = latent_dim
         self.network_architecture = network_architecture
         self.data_input = Input(shape=(data_dim,), name='enc_data_input')
+
         self.standard_normal_sampler = Lambda(sample_standard_normal_noise, name='enc_standard_normal_sampler')
+        self.standard_normal_sampler.arguments = {'data_dim': self.data_dim, 'noise_dim': self.noise_dim,
+                                                  'seed': config['seed']}
+
         self.standard_normal_sampler2 = Lambda(sample_standard_normal_noise, name='enc_standard_normal_sampler2')
+        self.standard_normal_sampler2.arguments = {'data_dim': self.data_dim, 'noise_dim': self.noise_dim,
+                                                   'seed': config['seed']}
 
     def __call__(self, *args, **kwargs):
         return None
@@ -64,8 +70,6 @@ class StandardEncoder(BaseEncoder):
         super(StandardEncoder, self).__init__(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
                                               network_architecture=network_architecture, name='Standard Encoder')
 
-        self.standard_normal_sampler.arguments = {'data_dim': self.data_dim, 'noise_dim': self.noise_dim,
-                                                  'seed': config['seed']}
         noise_input = self.standard_normal_sampler(self.data_input)
         encoder_body_model = get_network_by_name['encoder'][network_architecture](data_dim, noise_dim, latent_dim)
         latent_factors = encoder_body_model([self.data_input, noise_input])
@@ -122,7 +126,7 @@ class MomentEstimationEncoder(BaseEncoder):
 
         data_feature_extraction, noise_basis_extraction = models
 
-        self.standard_normal_sampler.arguments = {'n_basis': noise_basis_dim}
+        self.standard_normal_sampler.arguments['n_basis'] = noise_basis_dim
         noise = self.standard_normal_sampler(self.data_input)
         noise_basis_vectors = noise_basis_extraction(noise)
 
@@ -136,7 +140,8 @@ class MomentEstimationEncoder(BaseEncoder):
         latent_factors = Add(name='enc_add_weighted_vecs')(latent_factors)
         latent_factors = Add(name='add_z0_to_linear_combination')([z_0, latent_factors])
 
-        self.standard_normal_sampler2.arguments = {'n_basis': noise_basis_dim, 'n_samples': 100}
+        self.standard_normal_sampler2.arguments['n_basis'] = noise_basis_dim
+        self.standard_normal_sampler2.arguments['n_samples'] = 100
         more_noise = self.standard_normal_sampler2(self.data_input)
         sampling_basis_vectors = noise_basis_extraction(more_noise)
 
@@ -226,9 +231,6 @@ class ReparametrisedGaussianEncoder(BaseEncoder):
 
         latent_mean, latent_log_var = get_network_by_name['reparametrised_encoder'][network_architecture](
             self.data_input, latent_dim)
-        self.standard_normal_sampler.arguments = {'noise_dim': self.noise_dim,
-                                                  'data_dim': self.data_dim,
-                                                  'seed': config['seed']}
 
         noise = self.standard_normal_sampler(self.data_input)
 

@@ -33,13 +33,13 @@ def run_synthetic_experiment(model='vae', pretrained_model=None):
     elif model == 'avb+ac':
         trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=2, noise_dim=data_dim, noise_basis_dim=8,
                                   experiment_name='synthetic',  overwrite=True, use_adaptive_contrast=True,
-                                  optimiser_params={'encdec': {'lr': 0.0001, 'beta_1': 0.5},
-                                                    'disc': {'lr': 0.0002, 'beta_1': 0.5}},
+                                  optimiser_params={'encdec': {'lr': 0.0005, 'beta_1': 0.5},
+                                                    'disc': {'lr': 0.0007, 'beta_1': 0.5}},
                                   pretrained_dir=pretrained_model)
     else:
         raise ValueError('Unknown model type. Supported models: `vae`, `avb` and `avb+ac`.')
 
-    model_dir = trainer.run_training(train_data, batch_size=400, epochs=500)
+    model_dir = trainer.run_training(train_data, batch_size=400, epochs=200)
     # model_dir = "output/"
     trained_model = trainer.get_model()
 
@@ -114,4 +114,4 @@ def run_mnist_experiment(model='vae'):
 
 
 if __name__ == '__main__':
-    run_synthetic_experiment('vae', pretrained_model='output/gaussian_vae/synthetic/final')
+    run_synthetic_experiment('avb+ac', pretrained_model='output/avb_with_ac/synthetic/final')
