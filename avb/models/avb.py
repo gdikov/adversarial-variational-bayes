@@ -106,14 +106,16 @@ class AdversarialVariationalBayes(BaseVariationalAutoencoder):
 
             # define the trainable models
             self.avb_trainable_discriminator = FreezableModel(inputs=self.data_input,
-                                                              outputs=discriminator_loss, name_prefix=['disc'])
+                                                              outputs=discriminator_loss,
+                                                              name='freezable_discriminator')
             self.avb_trainable_encoder_decoder = FreezableModel(inputs=self.data_input,
-                                                                outputs=decoder_loss, name_prefix=['dec', 'enc'])
+                                                                outputs=decoder_loss,
+                                                                name='freezable_encoder_decoder')
 
             optimiser_params = optimiser_params or {'encdec': {'lr': 1e-4, 'beta_1': 0.5},
                                                     'disc': {'lr': 2e-4, 'beta_1': 0.5}}
-            self.avb_trainable_discriminator.freeze()
-            self.avb_trainable_encoder_decoder.unfreeze()
+            self.avb_trainable_discriminator.freeze(freezable_layers_prefix=['disc'], deep_freeze=True)
+            self.avb_trainable_encoder_decoder.unfreeze(unfreezable_layers_prefix=['dec', 'enc'], deep_unfreeze=True)
             optimiser_params_encdec = optimiser_params['encdec']
             self.avb_trainable_encoder_decoder.compile(optimizer=Adam(**optimiser_params_encdec), loss=None)
 

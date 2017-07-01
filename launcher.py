@@ -3,7 +3,6 @@ from os.path import join as path_join
 from numpy import repeat
 from avb.utils.visualisation import plot_latent_2d, plot_sampled_data, plot_reconstructed_data
 from avb.model_trainer import AVBModelTrainer, VAEModelTrainer
-from avb.models import AdversarialVariationalBayes, GaussianVariationalAutoencoder
 from avb.utils.datasets import load_npoints, load_mnist
 from avb.utils.logger import logger
 
@@ -29,7 +28,7 @@ def run_synthetic_experiment(model='vae', pretrained_model=None):
                                   overwrite=True, use_adaptive_contrast=False,
                                   optimiser_params={'encdec': {'lr': 0.0008, 'beta_1': 0.5},
                                                     'disc': {'lr': 0.0008, 'beta_1': 0.5}},
-                                  pretrained_dir=pretrained_model, test_only=True)
+                                  pretrained_dir=pretrained_model, test_only=False)
     elif model == 'avb+ac':
         trainer = AVBModelTrainer(data_dim=data_dim, latent_dim=2, noise_dim=data_dim, noise_basis_dim=8,
                                   experiment_name='synthetic',  overwrite=True, use_adaptive_contrast=True,
@@ -39,8 +38,8 @@ def run_synthetic_experiment(model='vae', pretrained_model=None):
     else:
         raise ValueError('Unknown model type. Supported models: `vae`, `avb` and `avb+ac`.')
 
-    # model_dir = trainer.run_training(train_data, batch_size=400, epochs=1)
-    model_dir = "output/"
+    model_dir = trainer.run_training(train_data, batch_size=400, epochs=4000)
+    # model_dir = "output/"
     trained_model = trainer.get_model()
 
     sampling_size = 1000
@@ -112,4 +111,4 @@ def run_mnist_experiment(model='vae'):
 
 
 if __name__ == '__main__':
-    run_synthetic_experiment('vae', pretrained_model='output/gaussian_vae/synthetic/final')
+    run_synthetic_experiment('avb')#, pretrained_model='output/avb/synthetic/final')

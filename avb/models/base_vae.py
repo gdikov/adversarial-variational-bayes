@@ -35,10 +35,12 @@ class BaseVariationalAutoencoder(object):
         name_prefix = name_prefix or 'base_vae'
         if resume_from is not None:
             from avb.models.losses import VAELossLayer, AVBEncoderDecoderLossLayer, AVBDiscriminatorLossLayer
+            from avb.models import FreezableModel
             self.load(resume_from, deployable_models_only,
                       custom_layers={'VAELossLayer': VAELossLayer,
                                      'AVBEncoderDecoderLossLayer': AVBEncoderDecoderLossLayer,
-                                     'AVBDiscriminatorLossLayer': AVBDiscriminatorLossLayer})
+                                     'AVBDiscriminatorLossLayer': AVBDiscriminatorLossLayer,
+                                     'FreezableModel': FreezableModel})
         else:
             if not hasattr(self, 'encoder') and hasattr(self, 'decoder'):
                 raise AttributeError("Initialise the attributes `encoder` and `decoder` in the child classes first!")

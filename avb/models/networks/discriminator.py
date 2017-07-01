@@ -2,10 +2,10 @@ from __future__ import absolute_import
 
 import logging
 
-import keras.backend as ker
 from keras.layers import Lambda
 from keras.models import Model, Input
 
+from .sampling import sample_adaptive_normal_noise
 from .architectures import get_network_by_name
 from ...utils.config import load_config
 
@@ -23,22 +23,9 @@ class BaseDiscriminator(object):
         self.network_architecture = network_architecture
         self.data_input = Input(shape=(data_dim,), name='disc_data_input')
         self.latent_input = Input(shape=(latent_dim,), name='disc_latent_input')
-        self.prior_sampler = Lambda(self.sample_adaptive_normal_noise, name='disc_prior_sampler')
+        self.prior_sampler = Lambda(sample_adaptive_normal_noise, name='disc_prior_sampler')
         self.discriminator_from_prior_model = None
         self.discriminator_from_posterior_model = None
-
-    def sample_adaptive_normal_noise(self, inputs, **kwargs):
-        if isinstance(inputs, list):
-            mu, sigma2 = inputs
-            n_samples = kwargs.get('n_samples', ker.shape(mu)[0])
-            samples_isotropic = ker.random_normal(shape=(n_samples, self.latent_dim),
-                                                  mean=0, stddev=1, seed=config['seed'])
-            samples = mu + ker.sqrt(sigma2) * samples_isotropic
-            return samples
-        else:
-            samples_isotropic = ker.random_normal(shape=(ker.shape(inputs)[0], self.latent_dim),
-                                                  mean=0, stddev=1, seed=config['seed'])
-            return samples_isotropic
 
     def __call__(self, *args, **kwargs):
         return None
@@ -78,6 +65,8 @@ class Discriminator(BaseDiscriminator):
                                             name='Standard Discriminator')
 
         discriminator_model = get_network_by_name['discriminator'][network_architecture](self.data_dim, self.latent_dim)
+
+        self.prior_sampler.arguments = {'latent_dim': self.latent_dim, 'seed': config['seed']}
         prior_distribution = self.prior_sampler(self.data_input)
         from_prior_output = discriminator_model([self.data_input, prior_distribution])
         self.discriminator_from_prior_model = Model(inputs=self.data_input, outputs=from_prior_output,

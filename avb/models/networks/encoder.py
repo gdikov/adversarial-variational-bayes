@@ -5,40 +5,16 @@ import logging
 import keras.backend as ker
 
 from numpy import pi as pi_const
-from keras.layers import Lambda, Concatenate, Multiply, Add, Dense
+from keras.layers import Lambda, Multiply, Add
 from keras.models import Input
 from keras.models import Model
 
+from .sampling import sample_standard_normal_noise
 from .architectures import get_network_by_name
 from ...utils.config import load_config
 
 config = load_config('global_config.yaml')
 logger = logging.getLogger(__name__)
-
-
-def sample_standard_normal_noise(inputs, **kwargs):
-    from keras.backend import shape, random_normal
-    n_samples = kwargs.get('n_samples', shape(inputs)[0])
-    n_basis_noise_vectors = kwargs.get('n_basis', -1)
-    data_dim = kwargs.get('data_dim', 1)
-    noise_dim = kwargs.get('noise_dim', data_dim)
-    seed = kwargs.get('seed', 7)
-
-    if n_basis_noise_vectors > 0:
-        samples_isotropic = random_normal(shape=(n_samples, n_basis_noise_vectors, noise_dim),
-                                          mean=0, stddev=1, seed=seed)
-    else:
-        samples_isotropic = random_normal(shape=(n_samples, noise_dim),
-                                          mean=0, stddev=1, seed=seed)
-    op_mode = kwargs.get('mode', 'none')
-    if op_mode == 'concatenate':
-        concat = Concatenate(axis=1, name='enc_noise_concatenation')([inputs, samples_isotropic])
-        return concat
-    elif op_mode == 'add':
-        resized_noise = Dense(data_dim, activation=None, name='enc_resized_noise_sampler')(samples_isotropic)
-        added_noise_data = Add(name='enc_adding_noise_data')([inputs, resized_noise])
-        return added_noise_data
-    return samples_isotropic
 
 
 class BaseEncoder(object):
@@ -88,7 +64,8 @@ class StandardEncoder(BaseEncoder):
         super(StandardEncoder, self).__init__(data_dim=data_dim, noise_dim=noise_dim, latent_dim=latent_dim,
                                               network_architecture=network_architecture, name='Standard Encoder')
 
-        # self.standard_normal_sampler.arguments = {'mode': 'add'}
+        self.standard_normal_sampler.arguments = {'data_dim': self.data_dim, 'noise_dim': self.noise_dim,
+                                                  'seed': config['seed']}
         noise_input = self.standard_normal_sampler(self.data_input)
         encoder_body_model = get_network_by_name['encoder'][network_architecture](data_dim, noise_dim, latent_dim)
         latent_factors = encoder_body_model([self.data_input, noise_input])
